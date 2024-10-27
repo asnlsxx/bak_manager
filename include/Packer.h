@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
+#include <fstream>
 #include "FileBase.h"
 
 namespace fs = std::filesystem;
@@ -13,8 +14,6 @@ private:
   fs::path root_path; // 需要备份或恢复的文件路径
   fs::path bak_path;  // 打包文件的路径
   std::unordered_map<ino_t, std::string> inode_table;
-
-  void DfsFile(FileBase &bak_file, fs::path cur_path);
 
 public:
   Packer(std::string root_path_, std::string pack_path_);

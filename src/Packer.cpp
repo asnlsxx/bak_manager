@@ -89,8 +89,6 @@ bool Packer::Unpack() {
       FileHeader header;
       backup_file.read(reinterpret_cast<char*>(&header), sizeof(FileHeader));
       
-      if (backup_file.eof()) break;
-
       spdlog::debug("解包文件: {}", header.name);
       fs::file_type type = st_mode_to_file_type(header.metadata.st_mode);
 

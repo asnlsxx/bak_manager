@@ -12,17 +12,15 @@ namespace fs = std::filesystem;
 
 class Packer {
 private:
-  fs::path root_path; // 需要备份或恢复的文件路径
-  fs::path bak_path;  // 打包文件的路径
+  fs::path source_path;      // 源路径（打包时是源目录，解包时是备份文件）
+  fs::path target_path;      // 目标路径（打包时是备份文件，解包时是目标目录）
   std::unordered_map<ino_t, std::string> inode_table;
   std::unordered_map<fs::file_type, std::unique_ptr<FileHandler>> handlers;
-  std::shared_ptr<spdlog::logger> logger;
 
   void InitializeHandlers();
-  void InitializeLogger();
 
 public:
-  Packer(std::string root_path_, std::string pack_path_);
+  Packer(std::string source_path_, std::string target_path_);
   ~Packer() = default;
 
   bool Pack();

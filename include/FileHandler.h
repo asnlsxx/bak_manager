@@ -11,37 +11,32 @@ namespace fs = std::filesystem;
 
 class FileHandler {
 public:
-  FileHandler(std::unordered_map<ino_t, std::string> &inode_table)
-      : inode_table_(inode_table) {}
-  virtual void Pack(const fs::path &path, std::ofstream &backup_file) = 0;
+  FileHandler() {}
+  virtual void Pack(const fs::path &path, std::ofstream &backup_file, std::unordered_map<ino_t, std::string>& inode_table) = 0;
   virtual void Unpack(const FileHeader &header, std::ifstream &backup_file) = 0;
   virtual ~FileHandler() = default;
 
-protected:
-  std::unordered_map<ino_t, std::string> &inode_table_;
+
 };
 
 class RegularFileHandler : public FileHandler {
 public:
-  RegularFileHandler(std::unordered_map<ino_t, std::string> &inode_table)
-      : FileHandler(inode_table) {}
-  void Pack(const fs::path &path, std::ofstream &backup_file) override;
+  RegularFileHandler() {}
+  void Pack(const fs::path &path, std::ofstream &backup_file, std::unordered_map<ino_t, std::string>& inode_table) override;
   void Unpack(const FileHeader &header, std::ifstream &backup_file) override;
 };
 
 class DirectoryHandler : public FileHandler {
 public:
-  DirectoryHandler(std::unordered_map<ino_t, std::string> &inode_table)
-      : FileHandler(inode_table) {}
-  void Pack(const fs::path &path, std::ofstream &backup_file) override;
+  DirectoryHandler() {}
+  void Pack(const fs::path &path, std::ofstream &backup_file, std::unordered_map<ino_t, std::string>& inode_table) override;
   void Unpack(const FileHeader &header, std::ifstream &backup_file) override;
 };
 
 class SymlinkHandler : public FileHandler {
 public:
-  SymlinkHandler(std::unordered_map<ino_t, std::string> &inode_table)
-      : FileHandler(inode_table) {}
-  void Pack(const fs::path &path, std::ofstream &backup_file) override;
+  SymlinkHandler() {}
+  void Pack(const fs::path &path, std::ofstream &backup_file, std::unordered_map<ino_t, std::string>& inode_table) override;
   void Unpack(const FileHeader &header, std::ifstream &backup_file) override;
 };
 

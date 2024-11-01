@@ -5,6 +5,18 @@
 #include <stdexcept>
 #include <vector>
 
+FileHandler::FileHandler(const fs::path &filepath) : std::fstream() {
+  // 获取文件元数据
+  struct stat file_stat;
+  if (stat(filepath.c_str(), &file_stat) != 0) {
+    throw std::runtime_error("无法获取文件信息: " + filepath.string());
+  }
+
+  // 初始化文件头
+  std::snprintf(fileheader.path, MAX_PATH_LEN, "%s", filepath.c_str());
+  fileheader.metadata = file_stat;
+}
+
 std::unique_ptr<FileHandler> FileHandler::Create(const fs::path &path) {
   fs::file_type type = fs::status(path).type();
   switch (type) {
@@ -38,7 +50,7 @@ bool FileHandler::IsHardLink() const {
 }
 
 bool FileHandler::OpenFile(std::ios_base::openmode mode_) {
-  open(fileheader.path, mode_);
+  this->open(this->fileheader.path, mode_);
   return is_open();
 }
 
@@ -89,14 +101,11 @@ void RegularFileHandler::Pack(
                     sizeof(fileheader));
 
   // 写入文件内容
-  // TODO 是否可以直接调用 this 来写入
-  std::ifstream input_file(fileheader.path, std::ios::binary);
-  if (!input_file) {
-    std::cerr << "无法打开文件: " << fileheader.path << std::endl;
-    return;
+  if (!this->OpenFile()) {
+    throw std::runtime_error("无法打开文件: " + std::string(fileheader.path));
   }
-  backup_file << input_file.rdbuf();
-  input_file.close();
+  backup_file << this->rdbuf();
+  this->close();
 }
 
 void DirectoryHandler::Pack(

@@ -24,17 +24,7 @@ public:
   FileHandler() = default;
 
   // 根据路径构造
-  explicit FileHandler(const fs::path &filepath) : std::fstream() {
-    // 获取文件元数据
-    struct stat file_stat;
-    if (stat(filepath.c_str(), &file_stat) != 0) {
-      throw std::runtime_error("无法获取文件信息: " + filepath.string());
-    }
-
-    // 初始化文件头
-    std::snprintf(fileheader.path, MAX_PATH_LEN, "%s", filepath.c_str());
-    fileheader.metadata = file_stat;
-  }
+  explicit FileHandler(const fs::path &filepath);
 
   static std::unique_ptr<FileHandler> Create(const fs::path& path);
   static std::unique_ptr<FileHandler> Create(const FileHeader &header);

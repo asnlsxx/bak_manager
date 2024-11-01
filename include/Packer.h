@@ -15,9 +15,6 @@ private:
   fs::path source_path;      // 源路径（打包时是源目录，解包时是备份文件）
   fs::path target_path;      // 目标路径（打包时是备份文件，解包时是目标目录）
   std::unordered_map<ino_t, std::string> inode_table;
-  std::unordered_map<fs::file_type, std::unique_ptr<FileHandler>> handlers;
-
-  void InitializeHandlers();
 
 public:
   Packer(std::string source_path_, std::string target_path_);

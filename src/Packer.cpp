@@ -1,5 +1,4 @@
 #include "Packer.h"
-#include "FileBase.h"
 #include "FileHandler.h"
 #include <fstream>
 #include "spdlog/spdlog.h"
@@ -13,19 +12,9 @@ Packer::Packer(std::string source_path_, std::string target_path_)
   std::string folder_name = source_path.filename().string();
   target_path = target_path / (folder_name + ".backup");
 
-  InitializeHandlers();
   spdlog::info("备份工具初始化完成");
 }
 
-void Packer::InitializeHandlers() {
-  handlers[fs::file_type::regular] =
-      std::make_unique<RegularFileHandler>();
-  handlers[fs::file_type::directory] =
-      std::make_unique<DirectoryHandler>();
-  handlers[fs::file_type::symlink] =
-      std::make_unique<SymlinkHandler>();
-  // 可以在这里添加更多的文件类型处理器
-}
 
 
 bool Packer::Pack() {
@@ -43,10 +32,8 @@ bool Packer::Pack() {
       const auto &path = entry.path();
       spdlog::debug("打包文件: {}", path.string());
 
-      fs::file_type type = fs::status(path).type();
-
-      if (auto it = handlers.find(type); it != handlers.end()) {
-        it->second->Pack(path, backup_file, inode_table);
+      if (auto handler = FileHandler::Create(path)) {
+        handler->Pack(backup_file, inode_table);
       } else {
         spdlog::warn("跳过未知文件类型: {}", path.string());
       }
@@ -57,19 +44,6 @@ bool Packer::Pack() {
     spdlog::error("打包过程出错: {}", e.what());
     return false;
   }
-}
-
-fs::file_type st_mode_to_file_type(mode_t mode) {
-    switch (mode & S_IFMT) {  // 使用 S_IFMT 提取文件类型的位
-        case S_IFREG:  return fs::file_type::regular;
-        case S_IFDIR:  return fs::file_type::directory;
-        case S_IFLNK:  return fs::file_type::symlink;
-        case S_IFCHR:  return fs::file_type::character;
-        case S_IFBLK:  return fs::file_type::block;
-        case S_IFIFO:  return fs::file_type::fifo;
-        case S_IFSOCK: return fs::file_type::socket;
-        default:       return fs::file_type::unknown;
-    }
 }
 
 bool Packer::Unpack() {
@@ -89,13 +63,12 @@ bool Packer::Unpack() {
       FileHeader header;
       backup_file.read(reinterpret_cast<char*>(&header), sizeof(FileHeader));
       
-      spdlog::debug("解包文件: {}", header.name);
-      fs::file_type type = st_mode_to_file_type(header.metadata.st_mode);
+      spdlog::debug("解包文件: {}", header.path);
 
-      if (auto it = handlers.find(type); it != handlers.end()) {
-        it->second->Unpack(header, backup_file);
+      if (auto handler = FileHandler::Create(header)) {
+        handler->Unpack(header, backup_file);
       } else {
-        spdlog::warn("跳过未知文件类型: {}", header.name);
+        spdlog::warn("跳过未知文件类型: {}", std::string(header.path));
       }
     }
 

@@ -66,7 +66,7 @@ bool Packer::Unpack() {
       spdlog::debug("解包文件: {}", header.path);
 
       if (auto handler = FileHandler::Create(header)) {
-        handler->Unpack(header, backup_file);
+        handler->Unpack(backup_file);
       } else {
         spdlog::warn("跳过未知文件类型: {}", std::string(header.path));
       }

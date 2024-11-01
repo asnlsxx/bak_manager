@@ -33,13 +33,13 @@ std::unique_ptr<FileHandler> FileHandler::Create(const fs::path &path) {
 
 std::unique_ptr<FileHandler> FileHandler::Create(const FileHeader &header) {
   auto mode = header.metadata.st_mode;
-  switch (mode & S_IFMT) { // 使用 S_IFMT 提取文件类型的位
+  switch (mode & S_IFMT) {
   case S_IFREG:
-    return std::make_unique<RegularFileHandler>();
+    return std::make_unique<RegularFileHandler>(header);
   case S_IFDIR:
-    return std::make_unique<DirectoryHandler>();
+    return std::make_unique<DirectoryHandler>(header);
   case S_IFLNK:
-    return std::make_unique<SymlinkHandler>();
+    return std::make_unique<SymlinkHandler>(header);
   default:
     return nullptr;
   }
@@ -73,36 +73,36 @@ void RegularFileHandler::Pack(
     std::ofstream &backup_file,
     std::unordered_map<ino_t, std::string> &inode_table) {
 
-  FileHeader fileheader = this->getFileHeader();
+  FileHeader header = this->getFileHeader();
 
   if (this->IsHardLink()) {
-    if (inode_table.count(fileheader.metadata.st_ino)) {
+    if (inode_table.count(header.metadata.st_ino)) {
       // 如果指向的inode已打包，写入文件头
-      backup_file.write(reinterpret_cast<const char *>(&fileheader),
-                        sizeof(fileheader));
+      backup_file.write(reinterpret_cast<const char *>(&header),
+                        sizeof(header));
 
       // 写入固定长度的硬链接目标路径
       // TODO: 硬链接目标路径可能超过MAX_PATH_LEN
       char link_buffer[MAX_PATH_LEN] = {0};
-      std::strncpy(link_buffer, inode_table[fileheader.metadata.st_ino].c_str(),
+      std::strncpy(link_buffer, inode_table[header.metadata.st_ino].c_str(),
                    MAX_PATH_LEN - 1);
       backup_file.write(link_buffer, MAX_PATH_LEN);
       return;
     } else {
       // 如果指向的inode未打包，作为常规文件处理
       // TODO: 对应的inode可能不在备份文件夹中
-      fileheader.metadata.st_nlink = 1;
-      inode_table[fileheader.metadata.st_ino] = std::string(fileheader.path);
+      header.metadata.st_nlink = 1;
+      inode_table[header.metadata.st_ino] = std::string(header.path);
     }
   }
 
   // 写入文件头
-  backup_file.write(reinterpret_cast<const char *>(&fileheader),
-                    sizeof(fileheader));
+  backup_file.write(reinterpret_cast<const char *>(&header),
+                    sizeof(header));
 
   // 写入文件内容
   if (!this->OpenFile()) {
-    throw std::runtime_error("无法打开文件: " + std::string(fileheader.path));
+    throw std::runtime_error("无法打开文件: " + std::string(header.path));
   }
   backup_file << this->rdbuf();
   this->close();
@@ -120,8 +120,8 @@ void SymlinkHandler::Pack(std::ofstream &backup_file,
   this->WriteHeader(backup_file);
 
   // 获取链接目标路径
-  FileHeader fileheader = this->getFileHeader();
-  std::string target_path = fs::read_symlink(fileheader.path).string();
+  FileHeader header = this->getFileHeader();
+  std::string target_path = fs::read_symlink(header.path).string();
 
   // 创建固定长度的buffer并填充
   // TODO: 硬链接目标路径可能超过MAX_PATH_LEN
@@ -133,8 +133,8 @@ void SymlinkHandler::Pack(std::ofstream &backup_file,
 }
 
 // TODO 恢复到相同文件夹重复的文件会报错，要先removeall
-void RegularFileHandler::Unpack(const FileHeader &header,
-                                std::ifstream &backup_file) {
+void RegularFileHandler::Unpack(std::ifstream &backup_file) {
+  FileHeader header = this->getFileHeader();
   if (header.metadata.st_nlink > 1) {
     // 处理硬链接
     char link_buffer[MAX_PATH_LEN];
@@ -166,13 +166,13 @@ void RegularFileHandler::Unpack(const FileHeader &header,
   }
 }
 
-void DirectoryHandler::Unpack(const FileHeader &header,
-                              std::ifstream &backup_file) {
+void DirectoryHandler::Unpack(std::ifstream &backup_file) {
+  FileHeader header = this->getFileHeader();
   fs::create_directories(header.path);
 }
 
-void SymlinkHandler::Unpack(const FileHeader &header,
-                            std::ifstream &backup_file) {
+void SymlinkHandler::Unpack(std::ifstream &backup_file) {
+  FileHeader header = this->getFileHeader();
   char link_buffer[MAX_PATH_LEN];
   backup_file.read(link_buffer, MAX_PATH_LEN);
 

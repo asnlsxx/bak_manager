@@ -14,7 +14,7 @@ constexpr std::size_t MAX_PATH_LEN = 100;
 
 struct FileHeader {
   char path[MAX_PATH_LEN];
-  struct stat metadata;
+  struct stat metadata;+
 };
 
 class FileHandler : public std::fstream {

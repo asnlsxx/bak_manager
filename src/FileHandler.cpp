@@ -141,6 +141,7 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file) {
     backup_file.read(link_buffer, MAX_PATH_LEN);
 
     // 创建硬链接
+    // TODO 创建失败怎么处理
     fs::create_hard_link(link_buffer, header.path);
     return;
   }
@@ -168,6 +169,7 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file) {
 
 void DirectoryHandler::Unpack(std::ifstream &backup_file) {
   FileHeader header = this->getFileHeader();
+  // TODO 创建失败怎么处理
   fs::create_directories(header.path);
 }
 
@@ -175,6 +177,6 @@ void SymlinkHandler::Unpack(std::ifstream &backup_file) {
   FileHeader header = this->getFileHeader();
   char link_buffer[MAX_PATH_LEN];
   backup_file.read(link_buffer, MAX_PATH_LEN);
-
+  // TODO 创建失败怎么处理
   fs::create_symlink(link_buffer, header.path);
 }

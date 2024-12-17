@@ -105,4 +105,42 @@ TEST_CASE("路径过滤器测试", "[filter][path]") {
     }
     
     cleanup_test_files();
+}
+
+TEST_CASE("冲突选项检查", "[filter][conflict]") {
+    create_test_files();
+    
+    SECTION("备份和恢复不能同时指定") {
+        auto parser = create_parser();
+        const char* argv[] = {
+            "test",
+            "-i", "test_files",
+            "-o", "backup",
+            "-b",  // 同时指定备份
+            "-r"   // 和恢复
+        };
+        
+        REQUIRE_THROWS_WITH(
+            parser.parse_check(7, const_cast<char**>(argv)),
+            "不能同时指定备份(-b)和恢复(-r)选项"
+        );
+    }
+    
+    SECTION("过滤选项只能在备份时使用") {
+        auto parser = create_parser();
+        const char* argv[] = {
+            "test",
+            "-i", "test_files",
+            "-o", "backup",
+            "-r",  // 恢复模式
+            "--type", "n"  // 但指定了过滤选项
+        };
+        
+        REQUIRE_THROWS_WITH(
+            parser.parse_check(8, const_cast<char**>(argv)),
+            "过滤选项只能在备份模式下使用"
+        );
+    }
+    
+    cleanup_test_files();
 } 

@@ -6,6 +6,19 @@
 namespace fs = std::filesystem;
 
 Packer::Packer(const cmdline::parser& parser) {
+  // 检查冲突选项
+  if (parser.exist("backup") && parser.exist("restore")) {
+    throw std::runtime_error("不能同时指定备份(-b)和恢复(-r)选项");
+  }
+  
+  // 检查过滤选项是否在正确的模式下使用
+  if (parser.exist("restore") && 
+      (parser.exist("type") || parser.exist("path") || 
+       parser.exist("name") || parser.exist("atime") || 
+       parser.exist("mtime") || parser.exist("ctime"))) {
+    throw std::runtime_error("过滤选项只能在备份模式下使用");
+  }
+
   // 获取输入输出路径
   source_path = fs::absolute(parser.get<std::string>("input"));
   target_path = fs::absolute(parser.get<std::string>("output"));
@@ -86,7 +99,7 @@ bool Packer::Pack() {
     for (const auto &entry : fs::recursive_directory_iterator(source_path)) {
       const auto &path = entry.path();
       
-      // 使用过滤器判断是否需要打包该文件
+      // 使��过滤器判断是否需要打包该文件
       if (!filter_(path)) {
         spdlog::debug("跳过文件: {}", path.string());
         continue;

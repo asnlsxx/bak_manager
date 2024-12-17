@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
     Packer packer(input_path, output_path);
 
     // 如果指定了过滤选项，设置过滤器
+    // TODO 冲突选项检测
     if (parser.exist("backup")) {
       // 构建文件过滤器
       packer.set_filter([&](const fs::path& path) {

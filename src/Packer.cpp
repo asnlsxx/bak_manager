@@ -10,6 +10,7 @@ Packer::Packer(std::string source_path_, std::string target_path_)
   spdlog::info("开始初始化备份工具...");
 
   std::string folder_name = source_path.filename().string();
+  // TODO 直接加后缀？
   target_path = target_path / (folder_name + ".backup");
 
   spdlog::info("备份工具初始化完成");

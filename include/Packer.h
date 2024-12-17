@@ -7,6 +7,7 @@
 #include <memory>
 #include "FileHandler.h"
 #include "spdlog/spdlog.h"
+#include "cmdline.h"
 #include <functional>
 
 namespace fs = std::filesystem;
@@ -21,15 +22,16 @@ private:
   using FileFilter = std::function<bool(const fs::path&)>;
   FileFilter filter_;
 
-public:
-  Packer(std::string source_path_, std::string target_path_);
-  ~Packer() = default;
+  // 解析命令行参数并设置过滤器
+  void parse_and_set_filter(const cmdline::parser& parser);
 
-  // 设置过滤器的方法
-  void set_filter(FileFilter filter) { filter_ = filter; }
+public:
+  Packer(const cmdline::parser& parser);
+  ~Packer() = default;
 
   bool Pack();
   bool Unpack();
+  bool List() const;  // 新增查看备份文件信息的功能
 };
 
 #endif // PACKER_H

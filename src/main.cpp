@@ -63,54 +63,9 @@ int main(int argc, char *argv[]) {
   try {
     initialize_logger(parser.exist("verbose"));
 
-    std::string input_path = parser.get<std::string>("input");
-    std::string output_path = parser.get<std::string>("output");
+    Packer packer(parser);
 
-    Packer packer(input_path, output_path);
-
-    // 如果指定了过滤选项，设置过滤器
-    // TODO 冲突选项检测
     if (parser.exist("backup")) {
-      // 构建文件过滤器
-      packer.set_filter([&](const fs::path& path) {
-        // 路径过滤
-        if (parser.exist("path")) {
-          std::regex path_pattern(parser.get<std::string>("path"));
-          if (!std::regex_match(path.string(), path_pattern)) {
-            return false;
-          }
-        }
-
-        // 文件名过滤
-        if (parser.exist("name")) {
-          std::regex name_pattern(parser.get<std::string>("name"));
-          if (!std::regex_match(path.filename().string(), name_pattern)) {
-            return false;
-          }
-        }
-
-        // 文件类型过滤
-        if (parser.exist("type")) {
-          std::string type = parser.get<std::string>("type");
-          fs::file_status status = fs::status(path);
-          char file_type;
-          switch (status.type()) {
-            case fs::file_type::regular: file_type = 'n'; break;
-            case fs::file_type::directory: file_type = 'd'; break;
-            case fs::file_type::symlink: file_type = 'l'; break;
-            case fs::file_type::fifo: file_type = 'p'; break;
-            default: file_type = 'x'; break;
-          }
-          if (type.find(file_type) == std::string::npos) {
-            return false;
-          }
-        }
-
-        // TODO: 添加时间过滤功能
-
-        return true;
-      });
-
       if (!packer.Pack()) {
         spdlog::error("备份失败");
         return 1;
@@ -123,9 +78,9 @@ int main(int argc, char *argv[]) {
       }
       spdlog::info("恢复完成");
     } else if (parser.exist("list")) {
-      // TODO: 实现查看备份文件信息的功能
-      spdlog::error("暂不支持查看备份文件信息功能");
-      return 1;
+      if (!packer.List()) {
+        return 1;
+      }
     }
 
   } catch (const std::exception &e) {

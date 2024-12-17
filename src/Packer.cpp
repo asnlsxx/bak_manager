@@ -5,18 +5,67 @@
 
 namespace fs = std::filesystem;
 
-Packer::Packer(std::string source_path_, std::string target_path_)
-    : source_path(fs::absolute(source_path_)), target_path(fs::absolute(target_path_)) {
+Packer::Packer(const cmdline::parser& parser) {
+  // 获取输入输出路径
+  source_path = fs::absolute(parser.get<std::string>("input"));
+  target_path = fs::absolute(parser.get<std::string>("output"));
+
   spdlog::info("开始初始化备份工具...");
 
-  std::string folder_name = source_path.filename().string();
-  // TODO 直接加后缀？
-  target_path = target_path / (folder_name + ".backup");
+  // 如果是备份操作，需要在目标路径后添加后缀
+  if (parser.exist("backup")) {
+    std::string folder_name = source_path.filename().string();
+    target_path = target_path / (folder_name + ".backup");
+  }
+
+  // 如果是备份操作且指定了过滤选项，设置过滤器
+  if (parser.exist("backup")) {
+    parse_and_set_filter(parser);
+  }
 
   spdlog::info("备份工具初始化完成");
 }
 
+void Packer::parse_and_set_filter(const cmdline::parser& parser) {
+  filter_ = [&parser](const fs::path& path) {
+    // 路径过滤
+    if (parser.exist("path")) {
+      std::regex path_pattern(parser.get<std::string>("path"));
+      if (!std::regex_match(path.string(), path_pattern)) {
+        return false;
+      }
+    }
 
+    // 文件名过滤
+    if (parser.exist("name")) {
+      std::regex name_pattern(parser.get<std::string>("name"));
+      if (!std::regex_match(path.filename().string(), name_pattern)) {
+        return false;
+      }
+    }
+
+    // 文件类型过滤
+    if (parser.exist("type")) {
+      std::string type = parser.get<std::string>("type");
+      fs::file_status status = fs::status(path);
+      char file_type;
+      switch (status.type()) {
+        case fs::file_type::regular: file_type = 'n'; break;
+        case fs::file_type::directory: file_type = 'd'; break;
+        case fs::file_type::symlink: file_type = 'l'; break;
+        case fs::file_type::fifo: file_type = 'p'; break;
+        default: file_type = 'x'; break;
+      }
+      if (type.find(file_type) == std::string::npos) {
+        return false;
+      }
+    }
+
+    // TODO: 添加时间过滤功能
+
+    return true;
+  };
+}
 
 bool Packer::Pack() {
   // 如果没有设置filter,使用默认的接受所有文件的过滤器
@@ -91,4 +140,10 @@ bool Packer::Unpack() {
     spdlog::error("解包过程出错: {}", e.what());
     return false;
   }
+}
+
+bool Packer::List() const {
+  // TODO: 实现查看备份文件信息的功能
+  spdlog::error("暂不支持查看备份文件信息功能");
+  return false;
 }

@@ -1,5 +1,4 @@
-#define CATCH_CONFIG_MAIN  // 这个宏告诉Catch2生成main()函数
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("简单的测试用例", "[sample]") {
     REQUIRE(1 + 1 == 2);

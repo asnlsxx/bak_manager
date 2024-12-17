@@ -29,3 +29,10 @@
 docker build -t backupmanager:latest .
 
 docker run -it --rm -v .:/backupmanager --name backupmanager backupmanager /bin/bash 
+
+
+dockerfile
+git clone https://github.com/catchorg/Catch2.git --depth=1
+cd Catch2
+cmake -B build -S . -DBUILD_TESTING=OFF
+cmake --build build/ --target install

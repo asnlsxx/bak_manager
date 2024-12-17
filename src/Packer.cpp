@@ -2,7 +2,7 @@
 #include "FileHandler.h"
 #include <fstream>
 #include "spdlog/spdlog.h"
-
+#include <regex>
 namespace fs = std::filesystem;
 
 Packer::Packer(const cmdline::parser& parser) {

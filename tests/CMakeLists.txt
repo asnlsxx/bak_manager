@@ -2,7 +2,7 @@
 add_executable(simple_test simple_test.cpp)
 
 # 链接Catch2
-target_link_libraries(simple_test Catch2::Catch2)
+target_link_libraries(simple_test PRIVATE Catch2::Catch2WithMain)
 
 # 将测试添加到CTest
 include(Catch)

@@ -37,7 +37,7 @@ install(TARGETS packer DESTINATION lib)
 enable_testing()
 
 # 查找Catch2包
-find_package(Catch2 2 REQUIRED)
+find_package(Catch2 3 REQUIRED)
 
 # 添加tests目录
 add_subdirectory(tests)

@@ -26,3 +26,6 @@
     - 增量备份 (5分)
 11. **其它功能**：视功能难度另计加分。
 
+docker build -t backupmanager:latest .
+
+docker run -it --rm -v .:/backupmanager --name backupmanager backupmanager /bin/bash 

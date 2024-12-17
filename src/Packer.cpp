@@ -18,6 +18,11 @@ Packer::Packer(std::string source_path_, std::string target_path_)
 
 
 bool Packer::Pack() {
+  // 如果没有设置filter,使用默认的接受所有文件的过滤器
+  if (!filter_) {
+    filter_ = [](const fs::path&) { return true; };
+  }
+
   spdlog::info("开始打包: {} -> {}", source_path.string(), target_path.string());
   try {
     std::ofstream backup_file(target_path, std::ios::binary);
@@ -30,6 +35,13 @@ bool Packer::Pack() {
 
     for (const auto &entry : fs::recursive_directory_iterator(source_path)) {
       const auto &path = entry.path();
+      
+      // 使用过滤器判断是否需要打包该文件
+      if (!filter_(path)) {
+        spdlog::debug("跳过文件: {}", path.string());
+        continue;
+      }
+
       spdlog::debug("打包文件: {}", path.string());
 
       if (auto handler = FileHandler::Create(path)) {

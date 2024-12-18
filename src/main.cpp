@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
   parser.add("compress", 'c', "备份时压缩文件");
   parser.add("encrypt", 'e', "备份时加密文件");
   parser.add<std::string>("path", '\0', "过滤路径：正则表达式", false);
-  parser.add<std::string>("type", '\0', "过滤文件类型: n普通文件,d目录文件,l链接文件,p管道文件", false);
+  parser.add<std::string>("type", '\0', "过滤文件类型: n普通文件,d目录文件,l符号链接", false);
   parser.add<std::string>("name", '\0', "过滤文件名：正则表达式", false);
   parser.add<std::string>("atime", '\0', "文件的访问时间区间", false);
   parser.add<std::string>("mtime", '\0', "文件的修改时间区间", false);
@@ -61,6 +61,19 @@ int main(int argc, char *argv[]) {
   }
 
   try {
+    // 检查冲突选项
+    if (parser.exist("backup") && parser.exist("restore")) {
+      throw std::runtime_error("不能同时指定备份(-b)和恢复(-r)选项");
+    }
+    
+    // 检查过滤选项是否在正确的模式下使用
+    if (parser.exist("restore") && 
+        (parser.exist("type") || parser.exist("path") || 
+         parser.exist("name") || parser.exist("atime") || 
+         parser.exist("mtime") || parser.exist("ctime"))) {
+      throw std::runtime_error("过滤选项只能在备份模式下使用");
+    }
+
     initialize_logger(parser.exist("verbose"));
 
     Packer packer(parser);

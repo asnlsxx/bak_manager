@@ -80,12 +80,8 @@ void RegularFileHandler::Pack(
       backup_file.write(reinterpret_cast<const char *>(&header),
                         sizeof(header));
 
-      // 写入固定长度的硬链接目标路径
-      // TODO: 硬链接目标路径可能超过MAX_PATH_LEN
-      char link_buffer[MAX_PATH_LEN] = {0};
-      std::strncpy(link_buffer, inode_table[header.metadata.st_ino].c_str(),
-                   MAX_PATH_LEN - 1);
-      backup_file.write(link_buffer, MAX_PATH_LEN);
+      // 使用新的长路径写入方法
+      WriteLongPath(backup_file, inode_table[header.metadata.st_ino]);
       return;
     } else { // 否则记录inode和路径
       // TODO: 对应的inode可能不在备份文件夹中
@@ -119,35 +115,27 @@ void SymlinkHandler::Pack(std::ofstream &backup_file,
 
   // 获取链接目标路径
   FileHeader header = this->getFileHeader();
-
   std::string target_path = fs::read_symlink(header.path).string();
-  spdlog::info("链接目标路径: {}", target_path);  
-  // 创建固定长度的buffer并填充
-  char link_buffer[MAX_PATH_LEN] = {0};
-  std::strncpy(link_buffer, target_path.c_str(), MAX_PATH_LEN - 1);
-
-  // 写入固定长度的链接路径
-  backup_file.write(link_buffer, MAX_PATH_LEN);
+  
+  // 使用新的长路径写入方法
+  WriteLongPath(backup_file, target_path);
 }
 
 void RegularFileHandler::Unpack(std::ifstream &backup_file) {
   FileHeader header = this->getFileHeader();
   if (header.metadata.st_nlink > 1) {
-    // 处理硬链接
-    char link_buffer[MAX_PATH_LEN];
-    backup_file.read(link_buffer, MAX_PATH_LEN);
+    // 使用新的长路径读取方法
+    std::string target_path = ReadLongPath(backup_file);
 
-    // 创建硬链接，使用当前目录作为基准
     fs::path link_path = fs::current_path() / header.path;
-    fs::path target_path = fs::current_path() / link_buffer;
+    fs::path target = fs::current_path() / target_path;
     
-    // 确保父目录存在,并删除已存在的文件
     fs::create_directories(link_path.parent_path());
 
     if(fs::exists(link_path)) {
       fs::remove(link_path);
     }
-    fs::create_hard_link(target_path, link_path);
+    fs::create_hard_link(target, link_path);
     return;
   }
 
@@ -188,16 +176,38 @@ void DirectoryHandler::Unpack(std::ifstream &backup_file) {
 
 void SymlinkHandler::Unpack(std::ifstream &backup_file) {
   FileHeader header = this->getFileHeader();
-  char link_buffer[MAX_PATH_LEN];
-  backup_file.read(link_buffer, MAX_PATH_LEN);
+  
+  // 使用新的长路径读取方法
+  std::string target_path = ReadLongPath(backup_file);
   
   fs::path link_path = fs::current_path() / header.path;
-
   fs::create_directories(link_path.parent_path());
 
   if(fs::exists(link_path)) {
     fs::remove(link_path);
   }
 
-  fs::create_symlink(link_buffer, link_path);
+  fs::create_symlink(target_path, link_path);
+}
+
+// 添加辅助函数实现
+void FileHandler::WriteLongPath(std::ofstream &backup_file, const std::string &path) const {
+    // 先写入路径总长度
+    uint32_t path_length = path.length();
+    backup_file.write(reinterpret_cast<const char*>(&path_length), sizeof(path_length));
+    
+    // 写入实际路径
+    backup_file.write(path.c_str(), path_length);
+}
+
+std::string FileHandler::ReadLongPath(std::ifstream &backup_file) const {
+    // 读取路径长度
+    uint32_t path_length;
+    backup_file.read(reinterpret_cast<char*>(&path_length), sizeof(path_length));
+    
+    // 读取实际路径
+    std::vector<char> buffer(path_length + 1, '\0');
+    backup_file.read(buffer.data(), path_length);
+    
+    return std::string(buffer.data(), path_length);
 }

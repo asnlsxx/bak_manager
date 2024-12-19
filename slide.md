@@ -46,7 +46,7 @@ fs::relative(fs::current_path()); 返回软链接指向 的相对路径
 
 测试链接指向外面是否正常
 如果要解决这种情况要重构：
-1. 硬链接用全扫一遍检查而不是记录表
+1. 硬链接用全扫一遍检查而不是记录表（似乎也不用，解包时不要靠header.metadata.st_nlink > 1而是另存一个值）
 2. 软链接用
 fs::path origin_path = std::filesystem::current_path();
   std::filesystem::current_path(link_path.parent_path());

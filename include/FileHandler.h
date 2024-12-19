@@ -46,6 +46,11 @@ protected:
                                                 std::ios_base::binary);
   const FileHeader &getFileHeader() const;
   void WriteHeader(std::ofstream &backup_file) const;
+
+  // 添加一个辅助函数来处理长路径
+  void WriteLongPath(std::ofstream &backup_file, const std::string &path) const;
+  // 读取可能超过MAX_PATH_LEN的路径
+  std::string ReadLongPath(std::ifstream &backup_file) const;
 };
 
 class RegularFileHandler : public FileHandler {

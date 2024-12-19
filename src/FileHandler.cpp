@@ -75,8 +75,8 @@ void RegularFileHandler::Pack(
   FileHeader header = this->getFileHeader();
 
   if (this->IsHardLink()) {
+    // 如果当前备份文件中已经存在该inode，则直接写入硬链接目标路径
     if (inode_table.count(header.metadata.st_ino)) {
-      // 如果指向的inode已打包，写入文件头
       backup_file.write(reinterpret_cast<const char *>(&header),
                         sizeof(header));
 
@@ -87,8 +87,7 @@ void RegularFileHandler::Pack(
                    MAX_PATH_LEN - 1);
       backup_file.write(link_buffer, MAX_PATH_LEN);
       return;
-    } else {
-      // 如果指向的inode未打包，作为常规文件处理
+    } else { // 否则记录inode和路径
       // TODO: 对应的inode可能不在备份文件夹中
       header.metadata.st_nlink = 1;
       inode_table[header.metadata.st_ino] = std::string(header.path);
@@ -122,6 +121,7 @@ void SymlinkHandler::Pack(std::ofstream &backup_file,
   FileHeader header = this->getFileHeader();
 
   std::string target_path = fs::read_symlink(header.path).string();
+  spdlog::info("链接目标路径: {}", target_path);  
   // 创建固定长度的buffer并填充
   char link_buffer[MAX_PATH_LEN] = {0};
   std::strncpy(link_buffer, target_path.c_str(), MAX_PATH_LEN - 1);
@@ -130,7 +130,6 @@ void SymlinkHandler::Pack(std::ofstream &backup_file,
   backup_file.write(link_buffer, MAX_PATH_LEN);
 }
 
-// TODO 恢复到相同文件夹重复的文件会报错，要先removeall
 void RegularFileHandler::Unpack(std::ifstream &backup_file) {
   FileHeader header = this->getFileHeader();
   if (header.metadata.st_nlink > 1) {
@@ -139,11 +138,15 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file) {
     backup_file.read(link_buffer, MAX_PATH_LEN);
 
     // 创建硬链接，使用当前目录作为基准
-    fs::path target_path = fs::current_path() / link_buffer;
     fs::path link_path = fs::current_path() / header.path;
+    fs::path target_path = fs::current_path() / link_buffer;
     
-    // 确保父目录存在
+    // 确保父目录存在,并删除已存在的文件
     fs::create_directories(link_path.parent_path());
+
+    if(fs::exists(link_path)) {
+      fs::remove(link_path);
+    }
     fs::create_hard_link(target_path, link_path);
     return;
   }
@@ -151,6 +154,11 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file) {
   // 创建常规文件，使用当前目录作为基准
   fs::path output_path = fs::current_path() / header.path;
   fs::create_directories(output_path.parent_path());
+  
+  // 如果文件已存在则删除
+  if(fs::exists(output_path)) {
+    fs::remove(output_path);
+  }
   
   std::ofstream output_file(output_path, std::ios::binary);
   if (!output_file) {
@@ -184,6 +192,12 @@ void SymlinkHandler::Unpack(std::ifstream &backup_file) {
   backup_file.read(link_buffer, MAX_PATH_LEN);
   
   fs::path link_path = fs::current_path() / header.path;
+
   fs::create_directories(link_path.parent_path());
+
+  if(fs::exists(link_path)) {
+    fs::remove(link_path);
+  }
+
   fs::create_symlink(link_buffer, link_path);
 }

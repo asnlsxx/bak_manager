@@ -43,3 +43,13 @@ fs::path(entry.path()).lexically_relative(fs::current_path()); 不会找软链�
 fs::relative(fs::current_path()); 返回软链接指向 的相对路径
 
 硬链接指向的文件也是硬链接
+
+测试链接指向外面是否正常
+如果要解决这种情况要重构：
+1. 硬链接用全扫一遍检查而不是记录表
+2. 软链接用
+fs::path origin_path = std::filesystem::current_path();
+  std::filesystem::current_path(link_path.parent_path());
+  std::filesystem::current_path(origin_path)
+这样既可以相对路径又可以解决软链接指向外面的问题
+现在只能解决内部问题

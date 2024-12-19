@@ -79,7 +79,6 @@ protected:
 
     // 执行备份和恢复测试
     void test_backup_and_restore() {
-        // 备份操作
         {
             Packer packer;
             fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
@@ -101,11 +100,10 @@ protected:
             for (const auto &file : test_files) {
                 fs::path restored_path = restore_dir / file.path;
                 
+                std::cout << "验证文件" << restored_path << std::endl;
                 REQUIRE(fs::exists(restored_path));
                 
-
                 // 根据文件类型进行具体验证
-                std::cout << "验证文件" << restored_path << std::endl;
                 switch (file.type) {
                     case TestFileType::Regular:
                         if (!file.is_hardlink) {
@@ -214,3 +212,4 @@ SCENARIO_METHOD(TestFixture, "备份和恢复深层嵌套结构",
     test_backup_and_restore();
   }
 }
+

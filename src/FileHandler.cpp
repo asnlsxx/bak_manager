@@ -1,31 +1,30 @@
 #include "FileHandler.h"
-#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <stdexcept>
 #include <vector>
-
+#include <spdlog/spdlog.h>
 FileHandler::FileHandler(const fs::path &filepath) : std::fstream() {
   // 获取文件元数据
   struct stat file_stat;
-  if (stat(filepath.c_str(), &file_stat) != 0) {
+  if (lstat(filepath.c_str(), &file_stat) != 0) {
     throw std::runtime_error("无法获取文件信息: " + filepath.string());
   }
-
-  // 初始化文件头
+  // 使用相对路径
   std::snprintf(fileheader.path, MAX_PATH_LEN, "%s", filepath.c_str());
   fileheader.metadata = file_stat;
 }
 
 std::unique_ptr<FileHandler> FileHandler::Create(const fs::path &path) {
-  fs::file_type type = fs::status(path).type();
+  // 使用 symlink_status 而不是 status 来获取链接本身的类型
+  fs::file_type type = fs::symlink_status(path).type();
   switch (type) {
+  case fs::file_type::symlink:
+    return std::make_unique<SymlinkHandler>(path);
   case fs::file_type::regular:
     return std::make_unique<RegularFileHandler>(path);
   case fs::file_type::directory:
     return std::make_unique<DirectoryHandler>(path);
-  case fs::file_type::symlink:
-    return std::make_unique<SymlinkHandler>(path);
   default:
     return nullptr;
   }
@@ -34,12 +33,12 @@ std::unique_ptr<FileHandler> FileHandler::Create(const fs::path &path) {
 std::unique_ptr<FileHandler> FileHandler::Create(const FileHeader &header) {
   auto mode = header.metadata.st_mode;
   switch (mode & S_IFMT) {
+  case S_IFLNK:
+    return std::make_unique<SymlinkHandler>(header);
   case S_IFREG:
     return std::make_unique<RegularFileHandler>(header);
   case S_IFDIR:
     return std::make_unique<DirectoryHandler>(header);
-  case S_IFLNK:
-    return std::make_unique<SymlinkHandler>(header);
   default:
     return nullptr;
   }
@@ -121,10 +120,9 @@ void SymlinkHandler::Pack(std::ofstream &backup_file,
 
   // 获取链接目标路径
   FileHeader header = this->getFileHeader();
-  std::string target_path = fs::read_symlink(header.path).string();
 
+  std::string target_path = fs::read_symlink(header.path).string();
   // 创建固定长度的buffer并填充
-  // TODO: 硬链接目标路径可能超过MAX_PATH_LEN
   char link_buffer[MAX_PATH_LEN] = {0};
   std::strncpy(link_buffer, target_path.c_str(), MAX_PATH_LEN - 1);
 
@@ -140,16 +138,23 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file) {
     char link_buffer[MAX_PATH_LEN];
     backup_file.read(link_buffer, MAX_PATH_LEN);
 
-    // 创建硬链接
-    // TODO 创建失败怎么处理
-    fs::create_hard_link(link_buffer, header.path);
+    // 创建硬链接，使用当前目录作为基准
+    fs::path target_path = fs::current_path() / link_buffer;
+    fs::path link_path = fs::current_path() / header.path;
+    
+    // 确保父目录存在
+    fs::create_directories(link_path.parent_path());
+    fs::create_hard_link(target_path, link_path);
     return;
   }
 
-  // 创建常规文件
-  std::ofstream output_file(header.path, std::ios::binary);
+  // 创建常规文件，使用当前目录作为基准
+  fs::path output_path = fs::current_path() / header.path;
+  fs::create_directories(output_path.parent_path());
+  
+  std::ofstream output_file(output_path, std::ios::binary);
   if (!output_file) {
-    throw std::runtime_error("无法创建文件: " + std::string(header.path));
+    throw std::runtime_error("无法创建文件: " + output_path.string());
   }
 
   char buffer[4096];
@@ -169,14 +174,16 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file) {
 
 void DirectoryHandler::Unpack(std::ifstream &backup_file) {
   FileHeader header = this->getFileHeader();
-  // TODO 创建失败怎么处理
-  fs::create_directories(header.path);
+  fs::path dir_path = fs::current_path() / header.path;
+  fs::create_directories(dir_path);
 }
 
 void SymlinkHandler::Unpack(std::ifstream &backup_file) {
   FileHeader header = this->getFileHeader();
   char link_buffer[MAX_PATH_LEN];
   backup_file.read(link_buffer, MAX_PATH_LEN);
-  // TODO 创建失败怎么处理
-  fs::create_symlink(link_buffer, header.path);
+  
+  fs::path link_path = fs::current_path() / header.path;
+  fs::create_directories(link_path.parent_path());
+  fs::create_symlink(link_buffer, link_path);
 }

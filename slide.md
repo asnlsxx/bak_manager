@@ -36,3 +36,10 @@ git clone https://github.com/catchorg/Catch2.git --depth=1
 cd Catch2
 cmake -B build -S . -DBUILD_TESTING=OFF
 cmake --build build/ --target install
+
+ctest --output-on-failure
+
+fs::path(entry.path()).lexically_relative(fs::current_path()); 不会找软链接指向
+fs::relative(fs::current_path()); 返回软链接指向 的相对路径
+
+硬链接指向的文件也是硬链接

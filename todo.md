@@ -4,3 +4,7 @@
 验证
 加密
 压缩
+
+统一
+backup_file.write(link_buffer, MAX_PATH_LEN);
+this->WriteHeader(backup_file);

@@ -1,10 +1,9 @@
 #include "Packer.h"
+#include "ArgParser.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
-#include "cmdline.h"
 #include <iostream>
-#include <regex>
 
 void initialize_logger(bool verbose) {
   try {
@@ -26,31 +25,7 @@ void initialize_logger(bool verbose) {
 
 int main(int argc, char *argv[]) {
   cmdline::parser parser;
-  
-  // 基本选项
-  parser.add<std::string>("input", 'i', "程序输入文件路径", true);
-  parser.add<std::string>("output", 'o', "程序输出文件路径", true);
-  parser.add("backup", 'b', "备份");
-  parser.add("restore", 'r', "恢复");
-  parser.add<std::string>("list", 'l', "查看指定备份文件的信息", false);
-  parser.add("verbose", 'v', "输出执行过程信息");
-  parser.add<std::string>("password", 'p', "指定密码", false);
-  parser.add("help", 'h', "查看帮助文档");
-
-  // 备份选项
-  parser.add("compress", 'c', "备份时压缩文件");
-  parser.add("encrypt", 'e', "备份时加密文件");
-  parser.add<std::string>("path", '\0', "过滤路径：正则表达式", false);
-  parser.add<std::string>("type", '\0', "过滤文件类型: n普通文件,d目录文件,l符号链接", false);
-  parser.add<std::string>("name", '\0', "过滤文件名：正则表达式", false);
-  parser.add<std::string>("atime", '\0', "文件的访问时间区间", false);
-  parser.add<std::string>("mtime", '\0', "文件的修改时间区间", false);
-  parser.add<std::string>("ctime", '\0', "文件的改变时间区间", false);
-  parser.add<std::string>("message", 'm', "添加备注信息", false);
-
-  // 恢复选项
-  parser.add("metadata", 'a', "恢复文件的元数据");
-
+  ParserConfig::configure_parser(parser);
   parser.parse_check(argc, argv);
 
   // 如果指定了帮助选项或没有指定任何操作，显示帮助信息
@@ -61,41 +36,36 @@ int main(int argc, char *argv[]) {
   }
 
   try {
-    // 检查冲突选项
-    if (parser.exist("backup") && parser.exist("restore")) {
-      throw std::runtime_error("不能同时指定备份(-b)和恢复(-r)选项");
-    }
-    
-    // 检查过滤选项是否在正确的模式下使用
-    if (parser.exist("restore") && 
-        (parser.exist("type") || parser.exist("path") || 
-         parser.exist("name") || parser.exist("atime") || 
-         parser.exist("mtime") || parser.exist("ctime"))) {
-      throw std::runtime_error("过滤选项只能在备份模式下使用");
-    }
-
+    ParserConfig::check_conflicts(parser);
     initialize_logger(parser.exist("verbose"));
 
-    Packer packer(parser);
+    Packer packer;
+    fs::path input_path = fs::absolute(parser.get<std::string>("input"));
+    fs::path output_path = fs::absolute(parser.get<std::string>("output"));
 
     if (parser.exist("backup")) {
-      if (!packer.Pack()) {
+      // 设置过滤器
+      packer.set_filter(ParserConfig::create_filter(parser));
+      
+      // 构造备份文件路径
+      fs::path backup_path = output_path / (input_path.filename().string() + ".backup");
+      
+      if (!packer.Pack(input_path, backup_path)) {
         spdlog::error("备份失败");
         return 1;
       }
       spdlog::info("备份完成");
     } else if (parser.exist("restore")) {
-      if (!packer.Unpack()) {
+      if (!packer.Unpack(input_path, output_path)) {
         spdlog::error("恢复失败");
         return 1;
       }
       spdlog::info("恢复完成");
     } else if (parser.exist("list")) {
-      if (!packer.List()) {
+      if (!packer.List(input_path)) {
         return 1;
       }
     }
-
   } catch (const std::exception &e) {
     spdlog::critical("发生错误: {}", e.what());
     return 1;

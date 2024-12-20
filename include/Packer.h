@@ -26,7 +26,7 @@ public:
     void set_filter(FileFilter filter) { filter_ = filter; }
     bool Pack(const fs::path& source_path, const fs::path& target_path);
     bool Unpack(const fs::path& backup_path, const fs::path& restore_path);
-    bool List(const fs::path& backup_path) const;
+    // 保留接口但不实现功能
 };
 
 #endif // PACKER_H

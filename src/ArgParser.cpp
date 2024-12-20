@@ -9,7 +9,6 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   parser.add<std::string>("output", 'o', "程序输出文件路径", true);
   parser.add("backup", 'b', "备份");
   parser.add("restore", 'r', "恢复");
-  parser.add<std::string>("list", 'l', "查看指定备份文件的信息", false);
   parser.add("verbose", 'v', "输出执行过程信息");
   parser.add<std::string>("password", 'p', "指定密码", false);
   parser.add("help", 'h', "查看帮助文档");

@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
 
   // 如果指定了帮助选项或没有指定任何操作，显示帮助信息
   if (parser.exist("help") || 
-      !(parser.exist("backup") || parser.exist("restore") || parser.exist("list"))) {
+      !(parser.exist("backup") || parser.exist("restore"))) {
     std::cout << parser.usage();
     return 0;
   }
@@ -61,11 +61,7 @@ int main(int argc, char *argv[]) {
         return 1;
       }
       spdlog::info("恢复完成");
-    } else if (parser.exist("list")) {
-      if (!packer.List(input_path)) {
-        return 1;
-      }
-    }
+    } 
   } catch (const std::exception &e) {
     spdlog::critical("发生错误: {}", e.what());
     return 1;

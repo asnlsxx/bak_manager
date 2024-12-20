@@ -1,6 +1,27 @@
 #include "Packer.h"
 #include <fstream>
 
+uint32_t Packer::calculateCRC32(const char* data, size_t length, uint32_t crc) const {
+    static const std::array<uint32_t, 256> crc32_table = []() {
+        std::array<uint32_t, 256> table;
+        constexpr uint32_t POLYNOMIAL = 0xEDB88320;
+        for (uint32_t i = 0; i < 256; i++) {
+            uint32_t c = i;
+            for (uint32_t j = 0; j < 8; j++) {
+                c = (c >> 1) ^ ((c & 1) ? POLYNOMIAL : 0);
+            }
+            table[i] = c;
+        }
+        return table;
+    }();
+
+    crc = ~crc;
+    while (length--) {
+        crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ static_cast<uint8_t>(*data++)];
+    }
+    return ~crc;
+}
+
 bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
     spdlog::info("开始打包: {} -> {}", source_path.string(), target_path.string());
     try {
@@ -10,9 +31,9 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
         }
 
         // 写入备份信息头，校验和先设为0
-        backup_info_.timestamp = std::time(nullptr);
-        backup_info_.checksum = 0;
-        backup_file.write(reinterpret_cast<const char*>(&backup_info_), sizeof(BackupInfo));
+        backup_header_.timestamp = std::time(nullptr);
+        backup_header_.checksum = 0;
+        backup_file.write(reinterpret_cast<const char*>(&backup_header_), sizeof(BackupHeader));
 
         // 切换到源目录，使得相对路径正确
         std::filesystem::current_path(source_path);
@@ -41,7 +62,7 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
         std::ifstream check_file(target_path, std::ios::binary);
 
         // 计算校验和
-        check_file.seekg(sizeof(BackupInfo));  // 跳过备份信息头
+        check_file.seekg(sizeof(BackupHeader));  // 跳过备份信息头
         std::vector<char> buffer(4096);
         uint32_t checksum = 0xFFFFFFFF;
 
@@ -54,11 +75,11 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
         }
 
         // 更新校验和
-        backup_info_.checksum = checksum;
+        backup_header_.checksum = checksum;
         
         // 重新打开文件用于更新校验和
         std::ofstream update_file(target_path, std::ios::binary | std::ios::in | std::ios::out);
-        update_file.write(reinterpret_cast<const char*>(&backup_info_), sizeof(BackupInfo));
+        update_file.write(reinterpret_cast<const char*>(&backup_header_), sizeof(BackupHeader));
 
         return true;
     } catch (const std::exception &e) {
@@ -76,8 +97,8 @@ bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
         }
 
         // 读取备份信息（并跳过）
-        BackupInfo stored_info;
-        backup_file.read(reinterpret_cast<char*>(&stored_info), sizeof(BackupInfo));
+        BackupHeader stored_header;
+        backup_file.read(reinterpret_cast<char*>(&stored_header), sizeof(BackupHeader));
         
         // 在目标路径下创建以备份文件名命名的文件夹
         fs::path project_dir = restore_path / backup_path.stem();
@@ -116,14 +137,14 @@ bool Packer::Verify(const fs::path& backup_path) {
         }
 
         // 读取备份信息
-        BackupInfo stored_info;
-        backup_file.read(reinterpret_cast<char*>(&stored_info), sizeof(BackupInfo));
+        BackupHeader stored_header;
+        backup_file.read(reinterpret_cast<char*>(&stored_header), sizeof(BackupHeader));
 
         // 保存原始校验和
-        uint32_t stored_checksum = stored_info.checksum;
+        uint32_t stored_checksum = stored_header.checksum;
 
         // 计算校验和
-        backup_file.seekg(sizeof(BackupInfo));  // 跳过备份信息头
+        backup_file.seekg(sizeof(BackupHeader));  // 跳过备份信息头
         std::vector<char> buffer(4096);
         uint32_t calculated_checksum = 0xFFFFFFFF;
 
@@ -143,8 +164,8 @@ bool Packer::Verify(const fs::path& backup_path) {
         }
 
         spdlog::info("备份文件验证成功");
-        spdlog::info("备份时间: {}", std::ctime(&stored_info.timestamp));
-        spdlog::info("备份描述: {}", stored_info.comment);
+        spdlog::info("备份时间: {}", std::ctime(&stored_header.timestamp));
+        spdlog::info("备份描述: {}", stored_header.comment);
         return true;
 
     } catch (const std::exception &e) {

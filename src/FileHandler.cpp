@@ -136,9 +136,11 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file, bool restore_metadat
       fs::remove(link_path);
     }
     fs::create_hard_link(target, link_path);
+    if (restore_metadata) {
+      RestoreMetadata(link_path, header.metadata);
+    }
     return;
   }
-
   // 创建常规文件，使用当前目录作为基准
   fs::path output_path = fs::current_path() / header.path;
   fs::create_directories(output_path.parent_path());
@@ -166,11 +168,11 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file, bool restore_metadat
   if (backup_file.fail() || output_file.fail()) {
     throw std::runtime_error("文件复制失败: " + std::string(header.path));
   }
-
   // 如果需要恢复元数据
   if (restore_metadata) {
     RestoreMetadata(output_path, header.metadata);
   }
+  // 关闭新建的文件
 }
 
 void DirectoryHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
@@ -229,7 +231,12 @@ std::string FileHandler::ReadLongPath(std::ifstream &backup_file) const {
 
 void FileHandler::RestoreMetadata(const fs::path& path, const struct stat& metadata) const {
     const char* path_str = path.c_str();
-    
+    struct stat restored_metadata;
+    if (stat(path_str, &restored_metadata) != 0) {
+        spdlog::warn("无法获取恢复后的元数据: {} ({})", path.string(), strerror(errno));
+    }
+
+
     // 还原文件权限信息
     if (chmod(path_str, metadata.st_mode & 07777) != 0) {  // 只还原权限位
         spdlog::warn("无法还原文件权限: {} ({})", path.string(), strerror(errno));

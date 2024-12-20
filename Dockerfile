@@ -8,6 +8,7 @@ FROM ubuntu:22.04
 
 # 设置时区
 ENV TZ="Asia/Shanghai"
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 构建环境
 RUN sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list

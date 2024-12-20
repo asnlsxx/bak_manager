@@ -2,6 +2,9 @@
 
 #include <regex>
 #include <stdexcept>
+#include <sys/stat.h>
+#include <spdlog/spdlog.h>
+#include <ctime>
 
 void ParserConfig::configure_parser(cmdline::parser& parser) {
   // 基本选项
@@ -20,9 +23,12 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   parser.add<std::string>("type", '\0',
                           "备份文件类型: n普通文件,d目录文件,l符号链接,p管道文件", false);
   parser.add<std::string>("name", '\0', "过滤文件名：正则表达式", false);
-  parser.add<std::string>("atime", '\0', "文件的访问时间区间", false);
-  parser.add<std::string>("mtime", '\0', "文件的修改时间区间", false);
-  parser.add<std::string>("ctime", '\0', "文件的改变时间区间", false);
+  parser.add<std::string>("atime", '\0', 
+      "按访问时间过滤，格式: START,END 例如: 202401010000,202401312359", false);
+  parser.add<std::string>("mtime", '\0', 
+      "按修改时间过滤，格式: START,END 例如: 202312010000,202312312359", false);
+  parser.add<std::string>("ctime", '\0', 
+      "按状态改变时间过滤，格式: START,END 例如: 202401010000,202401012359", false);
   parser.add<std::string>("message", 'm', "添加备注信息", false);
   // 恢复选项
   parser.add("metadata", 'a', "恢复文件的元数据");
@@ -47,6 +53,53 @@ void ParserConfig::check_conflicts(const cmdline::parser& parser) {
   }
 }
 
+namespace {
+    // 解析时间字符串为time_t
+    time_t parse_time(const std::string& time_str) {
+        if (time_str.length() != 12) {  // YYYYMMDDHHMM
+            throw std::runtime_error("时间格式错误，应为12位数字: " + time_str);
+        }
+
+        struct tm tm = {};
+        try {
+            tm.tm_year = std::stoi(time_str.substr(0, 4)) - 1900;
+            tm.tm_mon  = std::stoi(time_str.substr(4, 2)) - 1;
+            tm.tm_mday = std::stoi(time_str.substr(6, 2));
+            tm.tm_hour = std::stoi(time_str.substr(8, 2));
+            tm.tm_min  = std::stoi(time_str.substr(10, 2));
+            tm.tm_sec  = 0;
+        } catch (const std::exception& e) {
+            throw std::runtime_error("时间格式解析错误: " + time_str);
+        }
+
+        time_t time = mktime(&tm);
+        if (time == -1) {
+            throw std::runtime_error("无效的时间: " + time_str);
+        }
+        return time;
+    }
+
+    // 解析时间区间
+    std::pair<time_t, time_t> parse_time_range(const std::string& range_str) {
+        auto pos = range_str.find(',');
+        if (pos == std::string::npos) {
+            throw std::runtime_error("时间区间格式错误，应为START,END: " + range_str);
+        }
+
+        std::string start_str = range_str.substr(0, pos);
+        std::string end_str = range_str.substr(pos + 1);
+
+        time_t start_time = parse_time(start_str);
+        time_t end_time = parse_time(end_str);
+
+        if (end_time < start_time) {
+            throw std::runtime_error("结束时间不能早于开始时间");
+        }
+
+        return {start_time, end_time};
+    }
+}
+
 FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
   return [&parser](const fs::path& path) {
     // 路径过滤
@@ -64,13 +117,14 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
         return false;
       }
     }
+    // 如果是文件夹，则不进行过滤
+    if (fs::is_directory(path)) {
+      return true;
+    }
 
     // 文件类型过滤
     if (parser.exist("type")) {
       fs::file_status status = fs::symlink_status(path);
-      if (status.type() == fs::file_type::directory) {
-        return true;
-      }
       std::string type = parser.get<std::string>("type");
       char file_type;
       switch (status.type()) {
@@ -95,7 +149,36 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
       }
     }
 
-    // TODO: 添加时间过滤功能
+    // 获取文件状态
+    struct stat file_stat;
+    if (lstat(path.c_str(), &file_stat) != 0) {
+        spdlog::warn("无法获取文件时间信息: {}", path.string());
+        return false;
+    }
+
+    // 访问时间过滤
+    if (parser.exist("atime")) {
+        auto [start, end] = parse_time_range(parser.get<std::string>("atime"));
+        if (file_stat.st_atime < start || file_stat.st_atime > end) {
+            return false;
+        }
+    }
+
+    // 修改时间过滤
+    if (parser.exist("mtime")) {
+        auto [start, end] = parse_time_range(parser.get<std::string>("mtime"));
+        if (file_stat.st_mtime < start || file_stat.st_mtime > end) {
+            return false;
+        }
+    }
+
+    // 状态改变时间过滤
+    if (parser.exist("ctime")) {
+        auto [start, end] = parse_time_range(parser.get<std::string>("ctime"));
+        if (file_stat.st_ctime < start || file_stat.st_ctime > end) {
+            return false;
+        }
+    }
 
     return true;
   };

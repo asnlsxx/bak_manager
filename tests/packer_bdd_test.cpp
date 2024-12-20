@@ -144,6 +144,47 @@ protected:
             fs::remove_all(restore_dir);
         }
     }
+
+    // 辅助函数：设置测试文件的时间戳（移到 TestFixture 类中）
+    void setup_time_test_files() {
+        // 创建基本文件结构
+        std::vector<TestFile> files = {
+            {"file1.txt", TestFileType::Regular, "文件1"},
+            {"file2.txt", TestFileType::Regular, "文件2"},
+            {"file3.txt", TestFileType::Regular, "文件3"},
+            {"dir1", TestFileType::Directory},
+            {"dir1/file4.txt", TestFileType::Regular, "文件4"}
+        };
+        create_test_structure(files);
+
+        // 设置不同的时间戳
+        struct timespec times[2];
+        struct tm tm = {};
+
+        // 设置file1的时间为2024-01-01 10:00
+        tm = {};
+        tm.tm_year = 2024 - 1900;
+        tm.tm_mon = 0;   // 一月
+        tm.tm_mday = 1;
+        tm.tm_hour = 10;
+        times[0].tv_sec = times[1].tv_sec = mktime(&tm);
+        times[0].tv_nsec = times[1].tv_nsec = 0;
+        utimensat(AT_FDCWD, (test_dir / "file1.txt").c_str(), times, 0);
+
+        // 设置file2的时间为2024-01-02 15:30
+        tm.tm_mday = 2;
+        tm.tm_hour = 15;
+        tm.tm_min = 30;
+        times[0].tv_sec = times[1].tv_sec = mktime(&tm);
+        utimensat(AT_FDCWD, (test_dir / "file2.txt").c_str(), times, 0);
+
+        // 设置file3的时间为2024-01-03 20:00
+        tm.tm_mday = 3;
+        tm.tm_hour = 20;
+        tm.tm_min = 0;
+        times[0].tv_sec = times[1].tv_sec = mktime(&tm);
+        utimensat(AT_FDCWD, (test_dir / "file3.txt").c_str(), times, 0);
+    }
 };
 
 SCENARIO_METHOD(TestFixture, "备份和恢复基本文件结构", "[backup][restore][basic]") {
@@ -420,6 +461,117 @@ SCENARIO_METHOD(TestFixture, "备份时的文件路径过滤功能",
             REQUIRE(fs::exists(project_dir / "dir1/pipe1"));
             REQUIRE_FALSE(fs::exists(project_dir / "dir2/file4.log"));
 
+            fs::remove_all(restore_dir);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "按修改时间过滤（1月1日到1月2日）",
+                "[backup][filter][time]") {
+    GIVEN("一个包含不同时间的文件的目录") {
+        setup_time_test_files();
+        WHEN("执行备份") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program", "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--mtime", "202401010000,202401022359"
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
+            
+            fs::path project_dir = restore_dir / test_dir.filename();
+            REQUIRE(fs::exists(project_dir / "file1.txt"));
+            REQUIRE(fs::exists(project_dir / "file2.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "file3.txt"));
+            REQUIRE(fs::exists(project_dir / "dir1"));
+            
+            fs::remove_all(restore_dir);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "按修改时间过滤（1月2日到1月3日）",
+                "[backup][filter][time]") {
+    GIVEN("一个包含不同时间的文件的目录") {
+        setup_time_test_files();
+        WHEN("执行备份") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program", "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--mtime", "202401020000,202401032359"
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
+            
+            fs::path project_dir = restore_dir / test_dir.filename();
+            REQUIRE_FALSE(fs::exists(project_dir / "file1.txt"));
+            REQUIRE(fs::exists(project_dir / "file2.txt"));
+            REQUIRE(fs::exists(project_dir / "file3.txt"));
+            REQUIRE(fs::exists(project_dir / "dir1"));
+            
+            fs::remove_all(restore_dir);
+        }
+    }
+}
+
+
+SCENARIO_METHOD(TestFixture, "组合使用时间和文件名过滤",
+                "[backup][filter][time]") {
+    GIVEN("一个包含不同时间的文件的目录") {
+        setup_time_test_files();
+        WHEN("执行备份") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program", "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--mtime", "202401010000,202401022359",
+                "--name", "file[12]\\.txt"
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
+            
+            fs::path project_dir = restore_dir / test_dir.filename();
+            REQUIRE(fs::exists(project_dir / "file1.txt"));
+            REQUIRE(fs::exists(project_dir / "file2.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "file3.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "dir1"));
+            REQUIRE_FALSE(fs::exists(project_dir / "dir1/file4.txt"));
+            
             fs::remove_all(restore_dir);
         }
     }

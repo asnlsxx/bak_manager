@@ -14,3 +14,5 @@ this->WriteHeader(backup_file);
 参数冲突检测
 
 任务分配
+
+长文件名

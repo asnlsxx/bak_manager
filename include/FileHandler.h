@@ -88,4 +88,15 @@ public:
   void Unpack(std::ifstream &backup_file, bool restore_metadata = false) override;
 };
 
+class FIFOHandler : public FileHandler {
+public:
+    FIFOHandler() : FileHandler() {}
+    FIFOHandler(const fs::path &path) : FileHandler(path) {}
+    FIFOHandler(const FileHeader &header) : FileHandler(header) {}
+
+    void Pack(std::ofstream &backup_file,
+              std::unordered_map<ino_t, std::string> &inode_table) override;
+    void Unpack(std::ifstream &backup_file, bool restore_metadata = false) override;
+};
+
 #endif // FILE_HANDLER_H

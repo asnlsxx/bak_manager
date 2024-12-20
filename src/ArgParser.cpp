@@ -18,7 +18,7 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   parser.add("encrypt", 'e', "备份时加密文件");
   parser.add<std::string>("path", '\0', "过滤路径：正则表达式", false);
   parser.add<std::string>("type", '\0',
-                          "过滤文件类型: n普通文件,d目录文件,l符号链接", false);
+                          "备份文件类型: n普通文件,d目录文件,l符号链接,p管道文件", false);
   parser.add<std::string>("name", '\0', "过滤文件名：正则表达式", false);
   parser.add<std::string>("atime", '\0', "文件的访问时间区间", false);
   parser.add<std::string>("mtime", '\0', "文件的修改时间区间", false);
@@ -67,8 +67,11 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
 
     // 文件类型过滤
     if (parser.exist("type")) {
+      fs::file_status status = fs::symlink_status(path);
+      if (status.type() == fs::file_type::directory) {
+        return true;
+      }
       std::string type = parser.get<std::string>("type");
-      fs::file_status status = fs::status(path);
       char file_type;
       switch (status.type()) {
         case fs::file_type::regular:
@@ -79,6 +82,9 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
           break;
         case fs::file_type::symlink:
           file_type = 'l';
+          break;
+        case fs::file_type::fifo:
+          file_type = 'p';
           break;
         default:
           file_type = 'x';

@@ -25,6 +25,8 @@ std::unique_ptr<FileHandler> FileHandler::Create(const fs::path &path) {
     return std::make_unique<RegularFileHandler>(path);
   case fs::file_type::directory:
     return std::make_unique<DirectoryHandler>(path);
+  case fs::file_type::fifo:
+    return std::make_unique<FIFOHandler>(path);
   default:
     return nullptr;
   }
@@ -39,6 +41,8 @@ std::unique_ptr<FileHandler> FileHandler::Create(const FileHeader &header) {
     return std::make_unique<RegularFileHandler>(header);
   case S_IFDIR:
     return std::make_unique<DirectoryHandler>(header);
+  case S_IFIFO:
+    return std::make_unique<FIFOHandler>(header);
   default:
     return nullptr;
   }
@@ -251,5 +255,35 @@ void FileHandler::RestoreMetadata(const fs::path& path, const struct stat& metad
     struct timespec times[2] = {metadata.st_atim, metadata.st_mtim};
     if (utimensat(AT_FDCWD, path_str, times, AT_SYMLINK_NOFOLLOW) != 0) {
         spdlog::warn("无法还原文件时间戳: {} ({})", path.string(), strerror(errno));
+    }
+}
+
+void FIFOHandler::Pack(std::ofstream &backup_file,
+                      std::unordered_map<ino_t, std::string> &inode_table) {
+    // 管道文件只需要保存文件头信息
+    this->WriteHeader(backup_file);
+}
+
+void FIFOHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
+    FileHeader header = this->getFileHeader();
+    fs::path fifo_path = fs::current_path() / header.path;
+    
+    // 创建父目录
+    fs::create_directories(fifo_path.parent_path());
+    
+    // 如果已存在则删除
+    if(fs::exists(fifo_path)) {
+        fs::remove(fifo_path);
+    }
+    
+    // 创建管道文件
+    if (mkfifo(fifo_path.c_str(), header.metadata.st_mode & 07777) != 0) {
+        throw std::runtime_error("无法创建管道文件: " + fifo_path.string() + 
+                               " (" + strerror(errno) + ")");
+    }
+    
+    // 如果需要恢复元数据
+    if (restore_metadata) {
+        RestoreMetadata(fifo_path, header.metadata);
     }
 }

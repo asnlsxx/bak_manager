@@ -85,7 +85,11 @@ protected:
             REQUIRE(packer.Pack(test_dir, backup_path) == true);
             REQUIRE(fs::exists(backup_path));
         }
-
+        {
+            Packer packer;
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Verify(backup_path) == true);
+        }
         // 恢复操作
         {
             fs::path restore_dir = fs::absolute("restored_data");
@@ -95,10 +99,10 @@ protected:
             
             Packer packer;
             REQUIRE(packer.Unpack(backup_file, restore_dir) == true);
-
+            fs::path project_dir = restore_dir / test_dir.filename();
             // 验证恢复的文件
             for (const auto &file : test_files) {
-                fs::path restored_path = restore_dir / file.path;
+                fs::path restored_path = project_dir / file.path;
                 
                 std::cout << "验证文件" << restored_path << std::endl;
                 REQUIRE(fs::exists(restored_path));

@@ -5,8 +5,8 @@
 
 void ParserConfig::configure_parser(cmdline::parser& parser) {
   // 基本选项
-  parser.add<std::string>("input", 'i', "程序输入文件路径", true);
-  parser.add<std::string>("output", 'o', "程序输出文件路径", true);
+  parser.add<std::string>("input", 'i', "程序输入文件路径", false);
+  parser.add<std::string>("output", 'o', "程序输出文件路径", false);
   parser.add("backup", 'b', "备份");
   parser.add("restore", 'r', "恢复");
   parser.add("verbose", 'v', "输出执行过程信息");
@@ -24,9 +24,12 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   parser.add<std::string>("mtime", '\0', "文件的修改时间区间", false);
   parser.add<std::string>("ctime", '\0', "文件的改变时间区间", false);
   parser.add<std::string>("message", 'm', "添加备注信息", false);
-
   // 恢复选项
   parser.add("metadata", 'a', "恢复文件的元数据");
+
+  // 验证选项
+  parser.add("verify", 'l', "验证备份数据");
+
 }
 
 void ParserConfig::check_conflicts(const cmdline::parser& parser) {

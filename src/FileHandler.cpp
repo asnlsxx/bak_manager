@@ -85,7 +85,7 @@ void RegularFileHandler::Pack(
       return;
     } else { // 否则记录inode和路径
       // TODO: 对应的inode可能不在备份文件夹中
-      header.metadata.st_nlink = 1;
+      header.metadata.st_nlink = 1; // 方便还原时识别第一个相同的文件
       inode_table[header.metadata.st_ino] = std::string(header.path);
     }
   }
@@ -121,7 +121,7 @@ void SymlinkHandler::Pack(std::ofstream &backup_file,
   WriteLongPath(backup_file, target_path);
 }
 
-void RegularFileHandler::Unpack(std::ifstream &backup_file) {
+void RegularFileHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
   FileHeader header = this->getFileHeader();
   if (header.metadata.st_nlink > 1) {
     // 使用新的长路径读取方法
@@ -166,15 +166,25 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file) {
   if (backup_file.fail() || output_file.fail()) {
     throw std::runtime_error("文件复制失败: " + std::string(header.path));
   }
+
+  // 如果需要恢复元数据
+  if (restore_metadata) {
+    RestoreMetadata(output_path, header.metadata);
+  }
 }
 
-void DirectoryHandler::Unpack(std::ifstream &backup_file) {
+void DirectoryHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
   FileHeader header = this->getFileHeader();
   fs::path dir_path = fs::current_path() / header.path;
   fs::create_directories(dir_path);
+  
+  // 如果需要恢复元数据
+  if (restore_metadata) {
+    RestoreMetadata(dir_path, header.metadata);
+  }
 }
 
-void SymlinkHandler::Unpack(std::ifstream &backup_file) {
+void SymlinkHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
   FileHeader header = this->getFileHeader();
   
   // 使用新的长路径读取方法
@@ -188,6 +198,11 @@ void SymlinkHandler::Unpack(std::ifstream &backup_file) {
   }
 
   fs::create_symlink(target_path, link_path);
+  
+  // 如果需要恢复元数据
+  if (restore_metadata) {
+    RestoreMetadata(link_path, header.metadata);
+  }
 }
 
 // 添加辅助函数实现
@@ -210,4 +225,24 @@ std::string FileHandler::ReadLongPath(std::ifstream &backup_file) const {
     backup_file.read(buffer.data(), path_length);
     
     return std::string(buffer.data(), path_length);
+}
+
+void FileHandler::RestoreMetadata(const fs::path& path, const struct stat& metadata) const {
+    const char* path_str = path.c_str();
+    
+    // 还原文件权限信息
+    if (chmod(path_str, metadata.st_mode & 07777) != 0) {  // 只还原权限位
+        spdlog::warn("无法还原文件权限: {} ({})", path.string(), strerror(errno));
+    }
+
+    // 还原文件的用户和组
+    if (lchown(path_str, metadata.st_uid, metadata.st_gid) != 0) {
+        spdlog::warn("无法还原文件所有者: {} ({})", path.string(), strerror(errno));
+    }
+
+    // 还原时间戳(访问时间和修改时间)
+    struct timespec times[2] = {metadata.st_atim, metadata.st_mtim};
+    if (utimensat(AT_FDCWD, path_str, times, AT_SYMLINK_NOFOLLOW) != 0) {
+        spdlog::warn("无法还原文件时间戳: {} ({})", path.string(), strerror(errno));
+    }
 }

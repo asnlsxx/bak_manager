@@ -29,12 +29,23 @@ int main(int argc, char *argv[]) {
   parser.parse_check(argc, argv);
 
   // 如果指定了帮助选项或没有指定任何操作，显示帮助信息
-  if (parser.exist("help") || 
-      !(parser.exist("backup") || parser.exist("restore"))) {
+  if (parser.exist("help") ) {
     std::cout << parser.usage();
     return 0;
   }
-
+  if (parser.exist("verify") ) {
+    Packer packer;
+    fs::path input_path = fs::absolute(parser.get<std::string>("input"));
+    if (!packer.Verify(input_path)) {
+      spdlog::error("验证失败");
+      return 1;
+    }
+    return 0;
+  }
+  if (!(parser.exist("backup") || parser.exist("restore"))) {
+    std::cout << "请选择还原或备份选项" << std::endl;
+    return 0;
+  }
   try {
     ParserConfig::check_conflicts(parser);
     initialize_logger(parser.exist("verbose"));
@@ -56,6 +67,9 @@ int main(int argc, char *argv[]) {
       }
       spdlog::info("备份完成");
     } else if (parser.exist("restore")) {
+      // 设置是否恢复元数据
+      packer.set_restore_metadata(parser.exist("metadata"));
+      
       if (!packer.Unpack(input_path, output_path)) {
         spdlog::error("恢复失败");
         return 1;

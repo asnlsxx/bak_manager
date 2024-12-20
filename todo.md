@@ -8,3 +8,9 @@
 统一
 backup_file.write(link_buffer, MAX_PATH_LEN);
 this->WriteHeader(backup_file);
+
+超大文件（夹）测试
+
+参数冲突检测
+
+任务分配

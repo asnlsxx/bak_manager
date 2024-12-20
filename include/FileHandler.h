@@ -31,10 +31,10 @@ public:
   static std::unique_ptr<FileHandler> Create(const fs::path& path);
   static std::unique_ptr<FileHandler> Create(const FileHeader &header);
 
-  // TODO 是否可以将 table 放在 Pack 的全局空间中？
+  // TODO 是否可以将 table 放在 Packer 的全局空间中？还是直接在 Pack 定义即可？
   virtual void Pack(std::ofstream &backup_file,
                     std::unordered_map<ino_t, std::string> &inode_table) = 0;
-  virtual void Unpack(std::ifstream &backup_file) = 0;
+  virtual void Unpack(std::ifstream &backup_file, bool restore_metadata = false) = 0;
   virtual ~FileHandler() = default;
 
 private:
@@ -51,6 +51,8 @@ protected:
   void WriteLongPath(std::ofstream &backup_file, const std::string &path) const;
   // 读取可能超过MAX_PATH_LEN的路径
   std::string ReadLongPath(std::ifstream &backup_file) const;
+
+  void RestoreMetadata(const fs::path& path, const struct stat& metadata) const;
 };
 
 class RegularFileHandler : public FileHandler {
@@ -61,7 +63,7 @@ public:
 
   void Pack(std::ofstream &backup_file,
             std::unordered_map<ino_t, std::string> &inode_table) override;
-  void Unpack(std::ifstream &backup_file) override;
+  void Unpack(std::ifstream &backup_file, bool restore_metadata = false) override;
 };
 
 class DirectoryHandler : public FileHandler {
@@ -72,7 +74,7 @@ public:
 
   void Pack(std::ofstream &backup_file,
             std::unordered_map<ino_t, std::string> &inode_table) override;
-  void Unpack(std::ifstream &backup_file) override;
+  void Unpack(std::ifstream &backup_file, bool restore_metadata = false) override;
 };
 
 class SymlinkHandler : public FileHandler {
@@ -83,7 +85,7 @@ public:
 
   void Pack(std::ofstream &backup_file,
             std::unordered_map<ino_t, std::string> &inode_table) override;
-  void Unpack(std::ifstream &backup_file) override;
+  void Unpack(std::ifstream &backup_file, bool restore_metadata = false) override;
 };
 
 #endif // FILE_HANDLER_H

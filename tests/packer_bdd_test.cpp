@@ -576,3 +576,93 @@ SCENARIO_METHOD(TestFixture, "组合使用时间和文件名过滤",
         }
     }
 }
+
+SCENARIO_METHOD(TestFixture, "按文件大小过滤 - 大于指定大小",
+                "[backup][filter][size]") {
+    GIVEN("一个包含不同大小文件的目录") {
+        std::vector<TestFile> files = {
+            {"small.txt", TestFileType::Regular, std::string(100, 'a')},      // 100B
+            {"medium.txt", TestFileType::Regular, std::string(2000, 'b')},    // 2KB
+            {"large.txt", TestFileType::Regular, std::string(5000, 'c')},     // 5KB
+            {"dir1", TestFileType::Directory},
+            {"dir1/test.txt", TestFileType::Regular, std::string(3000, 'd')}, // 3KB
+        };
+        create_test_structure(files);
+
+        WHEN("过滤大于2KB的文件") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program", "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--size", ">2000b"  // 大于2000字节
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
+            
+            fs::path project_dir = restore_dir / test_dir.filename();
+            REQUIRE_FALSE(fs::exists(project_dir / "small.txt"));
+            REQUIRE(fs::exists(project_dir / "large.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "medium.txt"));
+            REQUIRE(fs::exists(project_dir / "dir1"));
+            REQUIRE(fs::exists(project_dir / "dir1/test.txt"));
+            
+            fs::remove_all(restore_dir);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "按文件大小过滤 - 小于指定大小",
+                "[backup][filter][size]") {
+    GIVEN("一个包含不同大小文件的目录") {
+        std::vector<TestFile> files = {
+            {"small.txt", TestFileType::Regular, std::string(100, 'a')},      // 100B
+            {"medium.txt", TestFileType::Regular, std::string(2000, 'b')},    // 2KB
+            {"large.txt", TestFileType::Regular, std::string(5000, 'c')},     // 5KB
+            {"dir1", TestFileType::Directory},
+            {"dir1/test.txt", TestFileType::Regular, std::string(3000, 'd')}, // 3KB
+        };
+        create_test_structure(files);
+
+        WHEN("过滤小于3KB的文件") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program", "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--size", "<3000b"  // 小于3000字节
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
+            
+            fs::path project_dir = restore_dir / test_dir.filename();
+            REQUIRE(fs::exists(project_dir / "small.txt"));
+            REQUIRE(fs::exists(project_dir / "medium.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "large.txt"));
+            REQUIRE(fs::exists(project_dir / "dir1"));
+            REQUIRE_FALSE(fs::exists(project_dir / "dir1/test.txt"));
+            
+            fs::remove_all(restore_dir);
+        }
+    }
+}

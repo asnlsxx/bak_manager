@@ -21,7 +21,7 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   parser.add("encrypt", 'e', "备份时加密文件");
   parser.add<std::string>("path", '\0', "过滤路径：正则表达式", false);
   parser.add<std::string>("type", '\0',
-                          "备份文件类型: n普通文件,d目录文件,l符号链接,p管道文件", false);
+                          "备份文件类型，可组合使用: n普通文件,l符号链接,p管道文件", false);
   parser.add<std::string>("name", '\0', "过滤文件名：正则表达式", false);
   parser.add<std::string>("atime", '\0', 
       "按访问时间过滤，格式: START,END 例如: 202401010000,202401312359", false);
@@ -36,6 +36,9 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   // 验证选项
   parser.add("verify", 'l', "验证备份数据");
 
+  // 添加文件大小过滤选项
+  parser.add<std::string>("size", '\0', 
+      "按文件大小过滤，格式: [<>]N[bkmg]，例如: >1k表示大于1KB, <1m表示小于1MB", false);
 }
 
 void ParserConfig::check_conflicts(const cmdline::parser& parser) {
@@ -98,6 +101,45 @@ namespace {
 
         return {start_time, end_time};
     }
+
+    // 解析文件大小
+    int64_t parse_size(const std::string& size_str) {
+        if (size_str.empty() || size_str.length() < 2) {
+            throw std::runtime_error("大小格式错误: " + size_str);
+        }
+
+        char compare = size_str[0];
+        bool is_greater = false;
+        size_t start_pos = 0;
+
+        if (compare == '>' || compare == '<') {
+            is_greater = (compare == '>');
+            start_pos = 1;
+        } else {
+            throw std::runtime_error("大小必须以>或<开头: " + size_str);
+        }
+
+        // 获取数值和单位
+        size_t unit_pos = size_str.find_first_not_of("0123456789", start_pos);
+        if (unit_pos == std::string::npos) {
+            throw std::runtime_error("缺少大小单位: " + size_str);
+        }
+
+        int64_t value = std::stoll(size_str.substr(start_pos, unit_pos - start_pos));
+        char unit = std::tolower(size_str[unit_pos]);
+
+        // 转换为字节
+        switch (unit) {
+            case 'b': break;                    // 字节
+            case 'k': value *= 1024; break;     // KB
+            case 'm': value *= 1024*1024; break;// MB
+            case 'g': value *= 1024*1024*1024; break; // GB
+            default:
+                throw std::runtime_error("无效的大小单位(b/k/m/g): " + size_str);
+        }
+
+        return is_greater ? value : -value;  // 负值表示小于
+    }
 }
 
 FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
@@ -130,9 +172,6 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
       switch (status.type()) {
         case fs::file_type::regular:
           file_type = 'n';
-          break;
-        case fs::file_type::directory:
-          file_type = 'd';
           break;
         case fs::file_type::symlink:
           file_type = 'l';
@@ -177,6 +216,27 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
         auto [start, end] = parse_time_range(parser.get<std::string>("ctime"));
         if (file_stat.st_ctime < start || file_stat.st_ctime > end) {
             return false;
+        }
+    }
+
+    // 文件大小过滤
+    if (parser.exist("size")) {
+        // 如果是目录，跳过大小检查
+        if (fs::is_directory(path)) {
+            return true;
+        }
+
+        int64_t threshold = parse_size(parser.get<std::string>("size"));
+        uintmax_t file_size = fs::file_size(path);
+
+        if (threshold > 0) {  // 大于
+            if (file_size <= threshold) {
+                return false;
+            }
+        } else {  // 小于
+            if (file_size >= -threshold) {
+                return false;
+            }
         }
     }
 

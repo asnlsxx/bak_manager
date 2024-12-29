@@ -23,11 +23,13 @@ uint32_t Packer::calculateCRC32(const char* data, size_t length, uint32_t crc) c
 }
 
 bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
-    spdlog::info("开始打包: {} -> {}", source_path.string(), target_path.string());
+    const fs::path normalized_source = source_path.lexically_normal();
+    const fs::path normalized_target = target_path.lexically_normal();
+    spdlog::info("开始打包: {} -> {}", normalized_source.string(), normalized_target.string());
     try {
-        std::ofstream backup_file(target_path, std::ios::binary);
+        std::ofstream backup_file(normalized_target, std::ios::binary);
         if (!backup_file) {
-            throw std::runtime_error("无法创建备份文件: " + target_path.string());
+            throw std::runtime_error("无法创建备份文件: " + normalized_target.string());
         }
 
         // 写入备份信息头，校验和先设为0
@@ -36,11 +38,11 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
         backup_file.write(reinterpret_cast<const char*>(&backup_header_), sizeof(BackupHeader));
 
         // 切换到源目录，使得相对路径正确
-        std::filesystem::current_path(source_path);
-        spdlog::info("切换工作目录到: {}", source_path.string());
+        std::filesystem::current_path(normalized_source);
+        spdlog::info("切换工作目录到: {}", normalized_source.string());
 
         // 先将所有数据写入备份文件
-        for (const auto &entry : fs::recursive_directory_iterator(source_path)) {
+        for (const auto &entry : fs::recursive_directory_iterator(normalized_source)) {
             const auto &path = fs::path(entry.path()).lexically_relative(fs::current_path());
             
             if (!filter_(path)) {
@@ -59,7 +61,7 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
 
         // 关闭输出流并重新打开用于读取
         backup_file.close();
-        std::ifstream check_file(target_path, std::ios::binary);
+        std::ifstream check_file(normalized_target, std::ios::binary);
 
         // 计算校验和
         check_file.seekg(sizeof(BackupHeader));  // 跳过备份信息头
@@ -78,7 +80,7 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
         backup_header_.checksum = checksum;
         
         // 重新打开文件用于更新校验和
-        std::ofstream update_file(target_path, std::ios::binary | std::ios::in | std::ios::out);
+        std::ofstream update_file(normalized_target, std::ios::binary | std::ios::in | std::ios::out);
         update_file.write(reinterpret_cast<const char*>(&backup_header_), sizeof(BackupHeader));
 
         return true;

@@ -31,7 +31,7 @@ endif()
 # 添加安装规则
 install(TARGETS BackupManager DESTINATION bin)
 install(TARGETS packer DESTINATION lib)
-# install(FILES include/Packer.h DESTINATION include)
+install(FILES include/Packer.h DESTINATION include)
 
 # 添加测试支持
 enable_testing()

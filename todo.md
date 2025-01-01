@@ -29,3 +29,7 @@ this->WriteHeader(backup_file);
  * @param inputPath 输入文件的路径。
  * @return false 压缩失败。
  */）
+
+ std::string data((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
+
+ // 通过buackupinfo传入给packer

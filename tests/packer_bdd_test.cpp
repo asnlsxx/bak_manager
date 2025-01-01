@@ -849,3 +849,60 @@ SCENARIO_METHOD(TestFixture, "测试加密和压缩的组合功能",
     }
 }
 
+SCENARIO_METHOD(TestFixture, "测试验证功能在不同模式下的表现",
+                "[backup][verify]") {
+    GIVEN("一个包含各种类型文件的测试目录") {
+        // 创建测试文件
+        std::string repeated_data(10000, 'R');  // 可压缩数据
+        std::string random_data;                 // 不易压缩数据
+        random_data.reserve(10000);
+        for(int i = 0; i < 10000; i++) {
+            random_data += static_cast<char>(rand() % 256);
+        }
+
+        std::vector<TestFile> files = {
+            {"compressible.txt", TestFileType::Regular, repeated_data},
+            {"random.bin", TestFileType::Regular, random_data},
+            {"dir1", TestFileType::Directory},
+            {"dir1/config.txt", TestFileType::Regular, "important=true\nkey=value"}
+        };
+        create_test_structure(files);
+
+        WHEN("同时使用压缩和加密模式备份") {
+            Packer packer;
+            packer.set_compress(true);
+            packer.set_encrypt(true, "test_password");
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            THEN("验证应该检查压缩和加密状态") {
+                // 使用正确配置验证
+                Packer verify_packer;
+                verify_packer.set_encrypt(true, "test_password");
+                REQUIRE(verify_packer.Verify(backup_path) == true);
+
+                // 修改备份文件内容以测试验证失败情况
+                {
+                    std::fstream file(backup_path, std::ios::in | std::ios::out | std::ios::binary);
+                    file.seekp(0, std::ios::end);
+                    std::streampos file_size = file.tellp();
+                    
+                    // 修改文件中间的一个字节
+                    file.seekp(file_size / 2, std::ios::beg);
+                    char c;
+                    file.read(&c, 1);
+                    c = ~c; // 对字节取反来修改内容
+                    file.seekp(-1, std::ios::cur);
+                    file.write(&c, 1);
+                    file.close();
+                }
+                
+                Packer corrupt_verify_packer;
+                corrupt_verify_packer.set_encrypt(true, "test_password");
+                REQUIRE(corrupt_verify_packer.Verify(backup_path) == false);
+            }
+        }
+    }
+}
+

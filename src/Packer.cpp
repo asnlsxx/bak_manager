@@ -56,6 +56,11 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
             final_data = std::move(file_data);
         }
 
+        if (encrypt_) {
+            // 加密数据
+            final_data = aes_->encrypt({final_data.data(), final_data.size()});
+        }
+
         // 计算校验和
         uint32_t checksum = calculateCRC32(final_data.data(), final_data.size());
 
@@ -141,11 +146,19 @@ bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
         backup_file.close();
 
         std::vector<char> final_data;
-        if (stored_header.mod & MOD_COMPRESSED) {
-            // 解压数据
-            final_data = LZWCompression::decompress(file_data.data(), file_data.size());
+        if (stored_header.mod & MOD_ENCRYPTED) {
+            if (!aes_) {
+                throw std::runtime_error("需要解密密钥");
+            }
+            // 先解密
+            final_data = aes_->decrypt(file_data.data(), file_data.size());
         } else {
             final_data = std::move(file_data);
+        }
+
+        if (stored_header.mod & MOD_COMPRESSED) {
+            // 再解压
+            final_data = LZWCompression::decompress(final_data.data(), final_data.size());
         }
 
         // 创建临时文件
@@ -257,6 +270,9 @@ bool Packer::Verify(const fs::path& backup_path) {
         spdlog::info("备份描述: {}", stored_header.comment);
         if (stored_header.mod & MOD_COMPRESSED) {
             spdlog::info("文件已压缩");
+        }
+        if (stored_header.mod & MOD_ENCRYPTED) {
+            spdlog::info("文件已加密");
         }
         return true;
 

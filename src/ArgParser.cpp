@@ -13,12 +13,12 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   parser.add("backup", 'b', "备份");
   parser.add("restore", 'r', "恢复");
   parser.add("verbose", 'v', "输出执行过程信息");
-  parser.add<std::string>("password", 'p', "指定密码", false);
   parser.add("help", 'h', "查看帮助文档");
 
   // 备份选项
   parser.add("compress", 'c', "备份时压缩文件");
   parser.add("encrypt", 'e', "备份时加密文件");
+  parser.add<std::string>("password", 'p', "加密/解密密码", false, std::string(""));
   parser.add<std::string>("path", '\0', "过滤路径：正则表达式", false);
   parser.add<std::string>("type", '\0',
                           "备份文件类型，可组合使用: n普通文件,l符号链接,p管道文件", false);
@@ -39,6 +39,8 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
   // 添加文件大小过滤选项
   parser.add<std::string>("size", '\0', 
       "按文件大小过滤，格式: [<>]N[bkmg]，例如: >1k表示大于1KB, <1m表示小于1MB", false);
+
+  
 }
 
 void ParserConfig::check_conflicts(const cmdline::parser& parser) {
@@ -53,6 +55,26 @@ void ParserConfig::check_conflicts(const cmdline::parser& parser) {
        parser.exist("atime") || parser.exist("mtime") ||
        parser.exist("ctime"))) {
     throw std::runtime_error("过滤选项只能在备份模式下使用");
+  }
+
+  // 加密相关的冲突检查
+  if (parser.exist("encrypt")) {
+    if (!parser.exist("backup")) {
+      throw std::runtime_error("加密选项只能在备份时使用");
+    }
+    if (parser.get<std::string>("password").empty()) {
+      throw std::runtime_error("启用加密时必须提供密码");
+    }
+  }
+
+  // 如果提供了密码但没有启用加密
+  if (parser.exist("password") && !parser.exist("encrypt") && !parser.exist("restore")) {
+    throw std::runtime_error("提供了密码但未启用加密或不是恢复操作");
+  }
+
+  // 恢复加密文件时必须提供密码
+  if (parser.exist("restore") && parser.get<std::string>("password").empty()) {
+    spdlog::warn("未提供密码，如果备份文件已加密将无法恢复");
   }
 }
 

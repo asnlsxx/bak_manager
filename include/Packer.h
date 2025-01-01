@@ -9,6 +9,7 @@
 #include <cstdint>
 #include "FileHandler.h"
 #include "spdlog/spdlog.h"
+#include "aes.h"
 
 namespace fs = std::filesystem;
 
@@ -29,6 +30,8 @@ private:
     std::unordered_map<ino_t, std::string> inode_table;
     bool restore_metadata_ = false;
     bool compress_ = false;              // 是否启用压缩
+    bool encrypt_ = false;               // 是否启用加密
+    std::unique_ptr<AESModule> aes_;    // AES加密模块
     BackupHeader backup_header_;
 
     using FileFilter = std::function<bool(const fs::path&)>;
@@ -58,6 +61,16 @@ public:
             backup_header_.mod |= MOD_COMPRESSED;
         } else {
             backup_header_.mod &= ~MOD_COMPRESSED;
+        }
+    }
+    void set_encrypt(bool encrypt, const std::string& password) {
+        encrypt_ = encrypt;
+        if (encrypt) {
+            aes_ = std::make_unique<AESModule>(password);
+            backup_header_.mod |= MOD_ENCRYPTED;
+        } else {
+            aes_.reset();
+            backup_header_.mod &= ~MOD_ENCRYPTED;
         }
     }
 

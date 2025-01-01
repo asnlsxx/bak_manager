@@ -61,6 +61,11 @@ int main(int argc, char *argv[]) {
       // 设置是否压缩
       packer.set_compress(parser.exist("compress"));
       
+      // 设置是否加密
+      if (parser.exist("encrypt")) {
+          packer.set_encrypt(true, parser.get<std::string>("password"));
+      }
+      
       // 构造备份文件路径
       fs::path backup_path = output_path / (input_path.filename().string() + ".backup");
       
@@ -72,6 +77,11 @@ int main(int argc, char *argv[]) {
     } else if (parser.exist("restore")) {
       // 设置是否恢复元数据
       packer.set_restore_metadata(parser.exist("metadata"));
+      
+      // 如果提供了密码，设置解密
+      if (parser.exist("password")) {
+          packer.set_encrypt(true, parser.get<std::string>("password"));
+      }
       
       if (!packer.Unpack(input_path, output_path)) {
         spdlog::error("恢复失败");

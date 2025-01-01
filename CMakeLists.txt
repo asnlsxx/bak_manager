@@ -14,18 +14,32 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # 添加源文件
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
+# 查找 OpenSSL 库
+find_package(OpenSSL REQUIRED)
+
 # 创建库
 add_library(packer STATIC ${SOURCES})
+target_link_libraries(packer
+    PRIVATE
+    OpenSSL::Crypto
+)
 
 # 创建可执行文件
 add_executable(BackupManager src/main.cpp)
 
 # 链接库到可执行文件
-target_link_libraries(BackupManager packer)
+target_link_libraries(BackupManager
+    PRIVATE 
+    packer
+    OpenSSL::Crypto
+)
 
 # 如果需要链接文件系统库（在某些系统上可能需要）
 if(UNIX AND NOT APPLE)
-    target_link_libraries(BackupManager stdc++fs)
+    target_link_libraries(BackupManager
+        PRIVATE
+        stdc++fs
+    )
 endif()
 
 # 添加安装规则
@@ -38,7 +52,6 @@ enable_testing()
 
 # 查找Catch2包
 find_package(Catch2 3 REQUIRED)
-
 
 # 添加BDD测试可执行文件
 add_executable(packer_bdd_test tests/packer_bdd_test.cpp)

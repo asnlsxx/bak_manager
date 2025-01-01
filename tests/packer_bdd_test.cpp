@@ -726,3 +726,126 @@ SCENARIO_METHOD(TestFixture, "测试压缩功能的有效性",
     }
 }
 
+SCENARIO_METHOD(TestFixture, "测试加密功能的有效性",
+                "[backup][encryption]") {
+    GIVEN("一个包含敏感数据的测试目录") {
+        // 创建测试文件
+        std::vector<TestFile> files = {
+            {"secret.txt", TestFileType::Regular, "这是一些敏感数据"},
+            {"dir1", TestFileType::Directory},
+            {"dir1/password.txt", TestFileType::Regular, "my_secret_password"}
+        };
+        create_test_structure(files);
+
+        WHEN("使用密码加密备份") {
+            Packer packer;
+            packer.set_encrypt(true, "test_password");
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            THEN("备份文件应该被正确加密") {
+                // 验证文件存在
+                REQUIRE(fs::exists(backup_path));
+                
+                // 验证文件完整性
+                REQUIRE(packer.Verify(backup_path) == true);
+
+                // 尝试不提供密码恢复
+                {
+                    Packer wrong_packer;
+                    fs::path wrong_restore_path = backup_dir / "wrong_restore";
+                    REQUIRE(wrong_packer.Unpack(backup_path, wrong_restore_path) == false);
+                }
+
+                // 使用错误密码恢复
+                {
+                    Packer wrong_packer;
+                    wrong_packer.set_encrypt(true, "wrong_password");
+                    fs::path wrong_restore_path = backup_dir / "wrong_restore";
+                    REQUIRE(wrong_packer.Unpack(backup_path, wrong_restore_path) == false);
+                }
+
+                // 使用正确密码恢复
+                fs::path restore_path = backup_dir / "restored";
+                Packer restore_packer;
+                restore_packer.set_encrypt(true, "test_password");
+                REQUIRE(restore_packer.Unpack(backup_path, restore_path) == true);
+
+                // 验证恢复的文件内容
+                fs::path restored_dir = restore_path / test_dir.filename();
+                
+                std::ifstream secret_file(restored_dir / "secret.txt");
+                std::string secret_content((std::istreambuf_iterator<char>(secret_file)), {});
+                REQUIRE(secret_content == "这是一些敏感数据");
+
+                std::ifstream password_file(restored_dir / "dir1/password.txt");
+                std::string password_content((std::istreambuf_iterator<char>(password_file)), {});
+                REQUIRE(password_content == "my_secret_password");
+
+                fs::remove_all(restore_path);
+            }
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "测试加密和压缩的组合功能",
+                "[backup][encryption][compression]") {
+    GIVEN("一个包含可压缩的敏感数据的测试目录") {
+        // 创建包含重复内容的敏感数据
+        std::string repeated_secret;
+        repeated_secret.reserve(10000);
+        for (int i = 0; i < 1000; ++i) {
+            repeated_secret += "sensitive_data_block_";
+        }
+
+        std::vector<TestFile> files = {
+            {"large_secret.txt", TestFileType::Regular, repeated_secret},
+            {"dir1", TestFileType::Directory},
+            {"dir1/config.txt", TestFileType::Regular, std::string(500, 'S')}  // 500个S
+        };
+        create_test_structure(files);
+
+        WHEN("同时使用压缩和加密进行备份") {
+            Packer packer;
+            packer.set_compress(true);
+            packer.set_encrypt(true, "test_password");
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            THEN("备份文件应该被压缩且加密") {
+                // 验证文件存在
+                REQUIRE(fs::exists(backup_path));
+                
+                // 验证压缩效果（文件应该明显小于原始大小）
+                size_t original_size = repeated_secret.size() + 500;
+                size_t compressed_size = fs::file_size(backup_path);
+                REQUIRE(compressed_size < original_size / 2);
+
+                // 验证文件完整性
+                REQUIRE(packer.Verify(backup_path) == true);
+
+                // 使用正确密码恢复
+                fs::path restore_path = backup_dir / "restored";
+                Packer restore_packer;
+                restore_packer.set_encrypt(true, "test_password");
+                REQUIRE(restore_packer.Unpack(backup_path, restore_path) == true);
+
+                // 验证恢复的文件内容
+                fs::path restored_dir = restore_path / test_dir.filename();
+                
+                std::ifstream large_file(restored_dir / "large_secret.txt");
+                std::string large_content((std::istreambuf_iterator<char>(large_file)), {});
+                REQUIRE(large_content == repeated_secret);
+
+                std::ifstream config_file(restored_dir / "dir1/config.txt");
+                std::string config_content((std::istreambuf_iterator<char>(config_file)), {});
+                REQUIRE(config_content == std::string(500, 'S'));
+
+                fs::remove_all(restore_path);
+            }
+        }
+    }
+}
+

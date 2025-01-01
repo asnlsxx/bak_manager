@@ -2,26 +2,32 @@
 #define AES_MODULE_H
 
 #include <string>
+#include <vector>
+#include <string_view>
+#include <array>
 
-// AESModule类提供文件或目录的加密和解密功能
 class AESModule {
 public:
-    // 构造函数，接受加密密钥和初始化向量（IV）
-    AESModule(const std::string& key, const std::string& iv);
+    static constexpr size_t KEY_SIZE = 32;  // 256位密钥
+    static constexpr size_t IV_SIZE = 16;   // 128位IV
+    using KeyType = std::array<unsigned char, KEY_SIZE>;
+    using IVType = std::array<unsigned char, IV_SIZE>;
 
-    // 加密指定路径的文件或目录
-    // inputPath: 输入文件或目录路径
-    // outputPath: 输出加密文件路径
-    bool encrypt(const std::string& inputPath, const std::string& outputPath);
+    // 构造函数，只接受密码
+    explicit AESModule(const std::string& password);
 
-    // 解密指定路径的加密文件
-    // inputPath: 输入加密文件路径
-    // outputPath: 输出解密文件或目录路径
-    bool deencrypt(const std::string& inputPath, const std::string& outputPath);
+    // 加密数据
+    std::vector<char> encrypt(const std::string_view& data);
+
+    // 解密数据
+    std::vector<char> decrypt(const char* data, size_t size);
 
 private:
-    std::string key_;
-    std::string iv_;
+    KeyType key_;
+    IVType iv_;
+
+    // 从密码派生密钥和IV
+    static std::pair<KeyType, IVType> derive_key_iv(const std::string& password);
 
     // 辅助函数：加密数据
     bool encryptData(const unsigned char* plaintext, int plaintext_len,

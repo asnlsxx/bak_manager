@@ -21,7 +21,11 @@ this->WriteHeader(backup_file);
 > 传入整个结构，参数以及预期结果
 > 一个 BDD 测试的内容太少了，能不能丰富点
 
+ 验证功能的测试
+
 打包失败（例如待备份文件夹不存在时）不要创建备份文件
+
+让TestFixture更通用
 
 注释（/**
  * @brief 压缩指定路径的文件。
@@ -36,4 +40,3 @@ this->WriteHeader(backup_file);
 
  pack and unpack 不再用文件
 
- 让TestFixture更通用

@@ -1,5 +1,9 @@
 #include "Packer.h"
+#include "Compression.h"
 #include <fstream>
+#include <array>
+#include <filesystem>
+#include <spdlog/spdlog.h>
 
 uint32_t Packer::calculateCRC32(const char* data, size_t length, uint32_t crc) const {
     static const std::array<uint32_t, 256> crc32_table = []() {
@@ -23,6 +27,63 @@ uint32_t Packer::calculateCRC32(const char* data, size_t length, uint32_t crc) c
 }
 
 bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
+    try {
+        // 创建临时文件用于打包
+        fs::path temp_path = target_path.parent_path() / (target_path.stem().string() + ".tmp");
+        
+        // 先执行正常的打包（不包含header和校验和）
+        if (!PackToFile(source_path, temp_path)) {
+            throw std::runtime_error("打包到临时文件失败");
+        }
+
+        // 读取临时文件数据
+        std::ifstream temp_file(temp_path, std::ios::binary);
+        if (!temp_file) {
+            fs::remove(temp_path);
+            throw std::runtime_error("无法打开临时文件");
+        }
+
+        std::vector<char> file_data((std::istreambuf_iterator<char>(temp_file)),
+                                   std::istreambuf_iterator<char>());
+        temp_file.close();
+        fs::remove(temp_path);  // 立即删除临时文件
+
+        std::vector<char> final_data;
+        if (compress_) {
+            // 压缩数据
+            final_data = LZWCompression::compress({file_data.data(), file_data.size()});
+        } else {
+            final_data = std::move(file_data);
+        }
+
+        // 计算校验和
+        uint32_t checksum = calculateCRC32(final_data.data(), final_data.size());
+
+        // 更新header
+        backup_header_.timestamp = std::time(nullptr);
+        backup_header_.checksum = checksum;
+
+        // 写入最终文件
+        std::ofstream target_file(target_path, std::ios::binary);
+        if (!target_file) {
+            throw std::runtime_error("无法创建最终备份文件");
+        }
+
+        // 写入header
+        target_file.write(reinterpret_cast<const char*>(&backup_header_), sizeof(BackupHeader));
+
+        // 写入数据
+        target_file.write(final_data.data(), final_data.size());
+        target_file.close();
+
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::error("打包过程出错: {}", e.what());
+        return false;
+    }
+}
+
+bool Packer::PackToFile(const fs::path& source_path, const fs::path& target_path) {
     const fs::path normalized_source = source_path.lexically_normal();
     const fs::path normalized_target = target_path.lexically_normal();
     spdlog::info("开始打包: {} -> {}", normalized_source.string(), normalized_target.string());
@@ -32,16 +93,11 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
             throw std::runtime_error("无法创建备份文件: " + normalized_target.string());
         }
 
-        // 写入备份信息头，校验和先设为0
-        backup_header_.timestamp = std::time(nullptr);
-        backup_header_.checksum = 0;
-        backup_file.write(reinterpret_cast<const char*>(&backup_header_), sizeof(BackupHeader));
-
         // 切换到源目录，使得相对路径正确
         std::filesystem::current_path(normalized_source);
         spdlog::info("切换工作目录到: {}", normalized_source.string());
 
-        // 先将所有数据写入备份文件
+        // 将所有数据写入备份文件
         for (const auto &entry : fs::recursive_directory_iterator(normalized_source)) {
             const auto &path = fs::path(entry.path()).lexically_relative(fs::current_path());
             
@@ -59,30 +115,7 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
             }
         }
 
-        // 关闭输出流并重新打开用于读取
         backup_file.close();
-        std::ifstream check_file(normalized_target, std::ios::binary);
-
-        // 计算校验和
-        check_file.seekg(sizeof(BackupHeader));  // 跳过备份信息头
-        std::vector<char> buffer(4096);
-        uint32_t checksum = 0xFFFFFFFF;
-
-        while (check_file) {
-            check_file.read(buffer.data(), buffer.size());
-            std::streamsize count = check_file.gcount();
-            if (count > 0) {
-                checksum = calculateCRC32(buffer.data(), count, checksum);
-            }
-        }
-
-        // 更新校验和
-        backup_header_.checksum = checksum;
-        
-        // 重新打开文件用于更新校验和
-        std::ofstream update_file(normalized_target, std::ios::binary | std::ios::in | std::ios::out);
-        update_file.write(reinterpret_cast<const char*>(&backup_header_), sizeof(BackupHeader));
-
         return true;
     } catch (const std::exception &e) {
         spdlog::error("打包过程出错: {}", e.what());
@@ -91,6 +124,60 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
 }
 
 bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
+    try {
+        // 读取备份文件
+        std::ifstream backup_file(backup_path, std::ios::binary);
+        if (!backup_file) {
+            throw std::runtime_error("无法打开备份文件: " + backup_path.string());
+        }
+
+        // 读取header
+        BackupHeader stored_header;
+        backup_file.read(reinterpret_cast<char*>(&stored_header), sizeof(BackupHeader));
+
+        // 读取剩余数据
+        std::vector<char> file_data((std::istreambuf_iterator<char>(backup_file)),
+                                   std::istreambuf_iterator<char>());
+        backup_file.close();
+
+        std::vector<char> final_data;
+        if (stored_header.mod & MOD_COMPRESSED) {
+            // 解压数据
+            final_data = LZWCompression::decompress(file_data.data(), file_data.size());
+        } else {
+            final_data = std::move(file_data);
+        }
+
+        // 创建临时文件
+        fs::path temp_path = backup_path.parent_path() / (backup_path.stem().string() + ".tmp");
+        // 写入临时文件
+        std::ofstream temp_file(temp_path, std::ios::binary);
+        if (!temp_file) {
+            throw std::runtime_error("无法创建临时文件");
+        }
+
+        // 写入文件头（不包含压缩标志）
+        BackupHeader temp_header = stored_header;
+        temp_header.mod &= ~MOD_COMPRESSED;  // 清除压缩标志
+        temp_file.write(reinterpret_cast<const char*>(&temp_header), sizeof(BackupHeader));
+
+        // 写入解压后的数据
+        temp_file.write(final_data.data(), final_data.size());
+        temp_file.close();
+
+        // 解包
+        bool result = UnpackFromFile(temp_path, restore_path);
+        fs::remove(temp_path);
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("解包过程出错: {}", e.what());
+        return false;
+    }
+}
+
+// 将原来的Unpack函数重命名为UnpackFromFile
+bool Packer::UnpackFromFile(const fs::path& backup_path, const fs::path& restore_path) {
     spdlog::info("开始解包: {} -> {}", backup_path.string(), restore_path.string());
     try {
         std::ifstream backup_file(backup_path, std::ios::binary);
@@ -145,7 +232,7 @@ bool Packer::Verify(const fs::path& backup_path) {
         // 保存原始校验和
         uint32_t stored_checksum = stored_header.checksum;
 
-        // 计算校验和
+        // 计算校验和（对压缩后的数据计算）
         backup_file.seekg(sizeof(BackupHeader));  // 跳过备份信息头
         std::vector<char> buffer(4096);
         uint32_t calculated_checksum = 0xFFFFFFFF;
@@ -168,6 +255,9 @@ bool Packer::Verify(const fs::path& backup_path) {
         spdlog::info("备份文件验证成功");
         spdlog::info("备份时间: {}", std::ctime(&stored_header.timestamp));
         spdlog::info("备份描述: {}", stored_header.comment);
+        if (stored_header.mod & MOD_COMPRESSED) {
+            spdlog::info("文件已压缩");
+        }
         return true;
 
     } catch (const std::exception &e) {

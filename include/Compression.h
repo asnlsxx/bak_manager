@@ -2,29 +2,27 @@
 #define COMPRESSION_H
 
 #include <string>
+#include <vector>
+#include <string_view>
 
-// 命名空间以避免命名冲突
 namespace LZWCompression {
 
 /**
- * @brief 压缩指定路径的文件。
+ * @brief 压缩数据。
  * 
- * @param inputPath 输入文件的路径。
- * @param outputPath 压缩后文件的保存路径。
- * @return true 压缩成功。
- * @return false 压缩失败。
+ * @param data 要压缩的数据
+ * @return std::vector<char> 压缩后的数据
  */
-bool compressFile(const std::string& inputPath, const std::string& outputPath);
+std::vector<char> compress(const std::string_view& data);
 
 /**
- * @brief 解压缩指定路径的文件。
+ * @brief 解压缩数据。
  * 
- * @param inputPath 压缩文件的路径。
- * @param outputPath 解压缩后文件的保存路径。
- * @return true 解压缩成功。
- * @return false 解压缩失败。
+ * @param data 压缩的数据
+ * @param size 压缩数据的大小
+ * @return std::vector<char> 解压后的数据
  */
-bool decompressFile(const std::string& inputPath, const std::string& outputPath);
+std::vector<char> decompress(const char* data, size_t size);
 
 } // namespace LZWCompression
 

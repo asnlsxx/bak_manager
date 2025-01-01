@@ -18,18 +18,26 @@ private:
     struct BackupHeader {
         time_t timestamp;                // 时间戳
         uint32_t checksum;              // CRC32校验和
-        char comment[COMMENT_SIZE];      // 描述信息（暂不实现）
-        unsigned char mod;               // 压缩、加密（暂不实现）
+        char comment[COMMENT_SIZE];      // 描述信息
+        unsigned char mod;               // 压缩、加密标志位
     };
+
+    // 定义标志位
+    static constexpr unsigned char MOD_COMPRESSED = 0x01;  // 0000 0001
+    static constexpr unsigned char MOD_ENCRYPTED = 0x02;   // 0000 0010
 
     std::unordered_map<ino_t, std::string> inode_table;
     bool restore_metadata_ = false;
+    bool compress_ = false;              // 是否启用压缩
     BackupHeader backup_header_;
 
     using FileFilter = std::function<bool(const fs::path&)>;
     FileFilter filter_ = [](const fs::path&) { return true; };
 
+    // 私有辅助函数
     uint32_t calculateCRC32(const char* data, size_t length, uint32_t crc = 0xFFFFFFFF) const;
+    bool PackToFile(const fs::path& source_path, const fs::path& target_path);
+    bool UnpackFromFile(const fs::path& backup_path, const fs::path& restore_path);
 
 public:
     Packer() {
@@ -43,6 +51,14 @@ public:
     void set_restore_metadata(bool restore) { restore_metadata_ = restore; }
     void set_comment(const std::string& comment) {
         std::strncpy(backup_header_.comment, comment.c_str(), COMMENT_SIZE - 1);
+    }
+    void set_compress(bool compress) { 
+        compress_ = compress;
+        if (compress) {
+            backup_header_.mod |= MOD_COMPRESSED;
+        } else {
+            backup_header_.mod &= ~MOD_COMPRESSED;
+        }
     }
 
     bool Pack(const fs::path& source_path, const fs::path& target_path);

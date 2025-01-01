@@ -33,3 +33,7 @@ this->WriteHeader(backup_file);
  std::string data((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
 
  // 通过buackupinfo传入给packer
+
+ pack and unpack 不再用文件
+
+ 让TestFixture更通用

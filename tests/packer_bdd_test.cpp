@@ -666,3 +666,63 @@ SCENARIO_METHOD(TestFixture, "按文件大小过滤 - 小于指定大小",
         }
     }
 }
+
+SCENARIO_METHOD(TestFixture, "测试压缩功能的有效性",
+                "[backup][compression]") {
+    GIVEN("一个包含高度可压缩内容的测试目录") {
+        // 创建测试文件，包含高度可压缩的内容
+        std::string repeated_hello;
+        repeated_hello.reserve(25000);  // 预分配空间
+        for (int i = 0; i < 5000; ++i) {
+            repeated_hello += "hello";
+        }
+
+        std::vector<TestFile> files = {
+            {"repeated.txt", TestFileType::Regular, std::string(10000, 'a')},  // 10KB 重复字符
+            {"dir1", TestFileType::Directory},
+            {"dir1/pattern.txt", TestFileType::Regular, repeated_hello}  // 25KB 重复模式
+        };
+        create_test_structure(files);
+
+        WHEN("使用压缩选项进行备份") {
+            Packer packer;
+            packer.set_compress(true);
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            THEN("备份文件应该被显著压缩") {
+                // 验证文件存在
+                REQUIRE(fs::exists(backup_path));
+
+                // 计算原始大小（不包括文件头等元数据）
+                size_t original_size = 10000 + 25000;  // 35KB 文本数据
+                size_t compressed_size = fs::file_size(backup_path);
+
+                // 验证压缩效果
+                REQUIRE(compressed_size < original_size / 2);  // 期望至少压缩50%
+                
+                // 验证文件完整性
+                REQUIRE(packer.Verify(backup_path) == true);
+
+                // 恢复文件并验证内容
+                fs::path restore_path = backup_dir / "restored";
+                REQUIRE(packer.Unpack(backup_path, restore_path) == true);
+
+                // 验证恢复的文件内容
+                fs::path restored_dir = restore_path / test_dir.filename();
+                
+                std::ifstream repeated_file(restored_dir / "repeated.txt");
+                std::string repeated_content((std::istreambuf_iterator<char>(repeated_file)), {});
+                REQUIRE(repeated_content == std::string(10000, 'a'));
+
+                std::ifstream pattern_file(restored_dir / "dir1/pattern.txt");
+                std::string pattern_content((std::istreambuf_iterator<char>(pattern_file)), {});
+                REQUIRE(pattern_content == repeated_hello);
+
+                fs::remove_all(restore_path);
+            }
+        }
+    }
+}
+

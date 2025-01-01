@@ -58,6 +58,9 @@ int main(int argc, char *argv[]) {
       // 设置过滤器
       packer.set_filter(ParserConfig::create_filter(parser));
       
+      // 设置是否压缩
+      packer.set_compress(parser.exist("compress"));
+      
       // 构造备份文件路径
       fs::path backup_path = output_path / (input_path.filename().string() + ".backup");
       

@@ -22,3 +22,10 @@ this->WriteHeader(backup_file);
 > 一个 BDD 测试的内容太少了，能不能丰富点
 
 打包失败（例如待备份文件夹不存在时）不要创建备份文件
+
+注释（/**
+ * @brief 压缩指定路径的文件。
+ * 
+ * @param inputPath 输入文件的路径。
+ * @return false 压缩失败。
+ */）

@@ -63,6 +63,44 @@ GUI::GUI() {
     auto logger = std::make_shared<spdlog::logger>("gui_logger", log_sink_);
     logger->set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
     spdlog::set_default_logger(logger);
+
+    // 设置现代化的深色主题
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 8.0f;
+    style.FrameRounding = 4.0f;
+    style.PopupRounding = 4.0f;
+    style.ScrollbarRounding = 4.0f;
+    style.GrabRounding = 4.0f;
+    style.TabRounding = 4.0f;
+    style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
+    style.WindowPadding = ImVec2(15, 15);
+    style.FramePadding = ImVec2(5, 5);
+    style.ItemSpacing = ImVec2(6, 6);
+    style.ScrollbarSize = 15;
+    style.GrabMinSize = 10;
+    
+    // 设置现代化配色
+    ImVec4* colors = style.Colors;
+    colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.08f, 0.08f, 1.00f);
+    colors[ImGuiCol_Border] = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_FrameBg] = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.28f, 0.28f, 0.28f, 1.00f);
+    colors[ImGuiCol_TitleBg] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
+    colors[ImGuiCol_TitleBgActive] = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_MenuBarBg] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
+    colors[ImGuiCol_ScrollbarBg] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.38f, 0.38f, 0.38f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.46f, 0.46f, 0.46f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.54f, 0.54f, 0.54f, 1.00f);
+    
+    // 主按钮颜色
+    colors[ImGuiCol_Button] = ImVec4(0.2f, 0.4f, 0.7f, 1.00f);
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.3f, 0.5f, 0.8f, 1.00f);
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.1f, 0.3f, 0.6f, 1.00f);
+    
+    // 设置字体
+    io.FontGlobalScale = 1.1f;  // 稍微增大字体
 }
 
 GUI::~GUI() {
@@ -213,8 +251,8 @@ void GUI::render_main_window() {
 
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.4f, 0.7f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.5f, 0.8f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.3f, 0.6f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.5f, 0.8f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.3f, 0.6f, 1.00f));
     
     if (ImGui::Button("备份", ImVec2(button_width, button_height))) {
         reset_input_fields();  // 重置输入字段
@@ -249,27 +287,33 @@ void GUI::render_main_window() {
         ImGui::Checkbox("自动滚动", &auto_scroll);
         
         // 日志内容区域
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
         ImGui::BeginChild("LogArea", ImVec2(0, log_height - 30), true, 
                          ImGuiWindowFlags_HorizontalScrollbar);
         
+        // 添加时间戳颜色
         for (const auto& line : log_buffer_) {
-            if (line.find("[error]") != std::string::npos)
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
-            else if (line.find("[warn]") != std::string::npos)
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.6f, 1.0f));
-            else if (line.find("[info]") != std::string::npos)
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
-            else
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
-                
-            ImGui::TextUnformatted(line.c_str());
-            ImGui::PopStyleColor();
+            // 提取时间戳
+            size_t timestamp_end = line.find("]");
+            if (timestamp_end != std::string::npos) {
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 
+                                 "%.*s", (int)timestamp_end + 1, line.c_str());
+                ImGui::SameLine();
+                // 剩余文本使用不同颜色
+                const char* remaining = line.c_str() + timestamp_end + 1;
+                if (line.find("[error]") != std::string::npos)
+                    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", remaining);
+                else if (line.find("[warn]") != std::string::npos)
+                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", remaining);
+                else if (line.find("[info]") != std::string::npos)
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "%s", remaining);
+                else
+                    ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "%s", remaining);
+            }
         }
         
-        if (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-            ImGui::SetScrollHereY(1.0f);
-        
         ImGui::EndChild();
+        ImGui::PopStyleColor();
     }
 
     ImGui::End();
@@ -540,6 +584,7 @@ void GUI::render_log_window() {
     ImGui::Separator();
     
     // 创建日志区域
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
     ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, 
                       ImGuiWindowFlags_HorizontalScrollbar);
     
@@ -564,6 +609,7 @@ void GUI::render_log_window() {
         ImGui::SetScrollHereY(1.0f);
     
     ImGui::EndChild();
+    ImGui::PopStyleColor();
     ImGui::End();
     
     // 限制日志行数

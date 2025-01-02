@@ -40,4 +40,6 @@ this->WriteHeader(backup_file);
 
  pack and unpack 不再用文件
 
-规则引擎
+对规则引擎的测试
+
+测试除了type -n以外的文件类型过滤

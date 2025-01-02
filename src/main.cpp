@@ -1,5 +1,6 @@
 #include "Packer.h"
 #include "ArgParser.h"
+#include "GUI.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
@@ -34,29 +35,41 @@ void initialize_logger(bool verbose) {
 int main(int argc, char *argv[]) {
   cmdline::parser parser;
   ParserConfig::configure_parser(parser);
+  
+  // 添加 GUI 选项
+  parser.add("gui", 'g', "启动图形界面");
+  
   parser.parse_check(argc, argv);
 
-  // 如果指定了帮助选项或没有指定任何操作，显示帮助信息
-  if (parser.exist("help") ) {
-    std::cout << parser.usage();
-    return 0;
-  }
-  if (parser.exist("verify") ) {
-    Packer packer;
-    fs::path input_path = fs::absolute(parser.get<std::string>("input"));
-    if (!packer.Verify(input_path)) {
-      spdlog::error("验证失败");
-      return 1;
-    }
-    return 0;
-  }
-  if (!(parser.exist("backup") || parser.exist("restore"))) {
-    std::cout << "请选择还原或备份选项" << std::endl;
-    return 0;
-  }
   try {
-    ParserConfig::check_conflicts(parser);
     initialize_logger(parser.exist("verbose"));
+    
+    // 如果指定了 GUI 模式
+    if (parser.exist("gui")) {
+      GUI gui;
+      gui.run();
+      return 0;
+    }
+
+    // 如果指定了帮助选项或没有指定任何操作，显示帮助信息
+    if (parser.exist("help") ) {
+      std::cout << parser.usage();
+      return 0;
+    }
+    if (parser.exist("verify") ) {
+      Packer packer;
+      fs::path input_path = fs::absolute(parser.get<std::string>("input"));
+      if (!packer.Verify(input_path)) {
+        spdlog::error("验证失败");
+        return 1;
+      }
+      return 0;
+    }
+    if (!(parser.exist("backup") || parser.exist("restore"))) {
+      std::cout << "请选择还原或备份选项" << std::endl;
+      return 0;
+    }
+    ParserConfig::check_conflicts(parser);
 
     Packer packer;
     fs::path input_path = fs::absolute(parser.get<std::string>("input"));

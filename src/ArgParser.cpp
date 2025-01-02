@@ -44,38 +44,122 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
 }
 
 void ParserConfig::check_conflicts(const cmdline::parser& parser) {
-  // 检查冲突选项
-  if (parser.exist("backup") && parser.exist("restore")) {
-    throw std::runtime_error("不能同时指定备份(-b)和恢复(-r)选项");
-  }
-
-  // 检查过滤选项是否在正确的模式下使用
-  if (parser.exist("restore") &&
-      (parser.exist("type") || parser.exist("path") || parser.exist("name") ||
-       parser.exist("atime") || parser.exist("mtime") ||
-       parser.exist("ctime"))) {
-    throw std::runtime_error("过滤选项只能在备份模式下使用");
-  }
-
-  // 加密相关的冲突检查
-  if (parser.exist("encrypt")) {
-    if (!parser.exist("backup")) {
-      throw std::runtime_error("加密选项只能在备份时使用");
+    // 检查基本操作选项
+    if (parser.exist("backup") && parser.exist("restore")) {
+        throw std::runtime_error("Cannot specify both backup (-b) and restore (-r) options");
     }
-    if (parser.get<std::string>("password").empty()) {
-      throw std::runtime_error("启用加密时必须提供密码");
+
+    // 检查必需的输入/输出路径
+    if (parser.exist("backup") || parser.exist("restore")) {
+        if (!parser.exist("input")) {
+            throw std::runtime_error("Input path (-i) is required");
+        }
+        if (!parser.exist("output")) {
+            throw std::runtime_error("Output path (-o) is required");
+        }
+
+        // 检查路径是否存在
+        fs::path input_path = fs::absolute(parser.get<std::string>("input"));
+        fs::path output_path = fs::absolute(parser.get<std::string>("output"));
+
+        if (parser.exist("backup")) {
+            // 备份模式：输入路径必须存在
+            if (!fs::exists(input_path)) {
+                throw std::runtime_error("Input path does not exist: " + input_path.string());
+            }
+            
+            // 检查输出目录是否存在，如果不存在则尝试创建
+            if (!fs::exists(output_path)) {
+                if (!fs::create_directories(output_path)) {
+                    throw std::runtime_error("Failed to create output directory: " + output_path.string());
+                }
+            } else if (!fs::is_directory(output_path)) {
+                throw std::runtime_error("Output path is not a directory: " + output_path.string());
+            }
+        } else if (parser.exist("restore")) {
+            // 还原模式：输入文件必须存在且是文件
+            if (!fs::exists(input_path)) {
+                throw std::runtime_error("Backup file does not exist: " + input_path.string());
+            }
+            if (!fs::is_regular_file(input_path)) {
+                throw std::runtime_error("Input path is not a valid backup file: " + input_path.string());
+            }
+            
+            // 检查输出目录
+            if (!fs::exists(output_path)) {
+                if (!fs::create_directories(output_path)) {
+                    throw std::runtime_error("Failed to create restore directory: " + output_path.string());
+                }
+            } else if (!fs::is_directory(output_path)) {
+                throw std::runtime_error("Restore path is not a directory: " + output_path.string());
+            }
+        }
     }
-  }
 
-  // 如果提供了密码但没有启用加密
-  if (parser.exist("password") && !parser.exist("encrypt") && !parser.exist("restore")) {
-    throw std::runtime_error("提供了密码但未启用加密或不是恢复操作");
-  }
+    // 检查验证模式的参数
+    if (parser.exist("verify")) {
+        if (!parser.exist("input")) {
+            throw std::runtime_error("Input path (-i) is required for verify operation");
+        }
+        fs::path input_path = fs::absolute(parser.get<std::string>("input"));
+        if (!fs::exists(input_path)) {
+            throw std::runtime_error("Backup file does not exist: " + input_path.string());
+        }
+        if (!fs::is_regular_file(input_path)) {
+            throw std::runtime_error("Input path is not a valid backup file: " + input_path.string());
+        }
+    }
 
-  // 恢复加密文件时必须提供密码
-  if (parser.exist("restore") && parser.get<std::string>("password").empty()) {
-    spdlog::warn("未提供密码，如果备份文件已加密将无法恢复");
-  }
+    // 检查过滤选项是否在正确的模式下使用
+    if (parser.exist("restore") &&
+        (parser.exist("type") || parser.exist("path") || parser.exist("name") ||
+         parser.exist("atime") || parser.exist("mtime") || parser.exist("ctime") ||
+         parser.exist("size"))) {
+        throw std::runtime_error("Filter options can only be used in backup mode");
+    }
+
+    // 加密相关的检查
+    if (parser.exist("encrypt")) {
+        if (!parser.exist("backup")) {
+            throw std::runtime_error("Encryption can only be used in backup mode");
+        }
+        if (parser.get<std::string>("password").empty()) {
+            throw std::runtime_error("Password is required when encryption is enabled");
+        }
+    }
+
+    // 密码相关的检查
+    if (parser.exist("password")) {
+        if (!parser.exist("encrypt") && !parser.exist("restore")) {
+            throw std::runtime_error("Password can only be used with encryption or restore");
+        }
+    }
+
+    // 元数据相关的检查
+    if (parser.exist("metadata") && !parser.exist("restore")) {
+        throw std::runtime_error("Metadata option can only be used in restore mode");
+    }
+
+    // 时间范围格式检查
+    auto check_time_format = [](const std::string& time_str) {
+        if (!time_str.empty() && !std::regex_match(time_str, 
+            std::regex("\\d{12},\\d{12}"))) {
+            throw std::runtime_error("Invalid time format. Expected: YYYYMMDDHHMM,YYYYMMDDHHMM");
+        }
+    };
+
+    if (parser.exist("atime")) check_time_format(parser.get<std::string>("atime"));
+    if (parser.exist("mtime")) check_time_format(parser.get<std::string>("mtime"));
+    if (parser.exist("ctime")) check_time_format(parser.get<std::string>("ctime"));
+
+    // 文件大小格式检查
+    if (parser.exist("size")) {
+        const std::string& size_str = parser.get<std::string>("size");
+        if (!std::regex_match(size_str, 
+            std::regex("[<>]\\d+[bkmg]"))) {
+            throw std::runtime_error("Invalid size format. Expected: [<>]N[bkmg]");
+        }
+    }
 }
 
 namespace {

@@ -31,6 +31,30 @@ GUI::GUI() {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
+    // 配置字体
+    ImGuiIO& io = ImGui::GetIO();
+    
+    // 默认字体配置
+    ImFontConfig config;
+    config.MergeMode = true;  // 启用字体合并
+    config.PixelSnapH = true;
+    
+    // 加载默认字体（英文）
+    io.Fonts->AddFontDefault();
+    
+    // 加载中文字体并合并
+    static const ImWchar ranges[] = {
+        0x0020, 0x00FF, // 基本拉丁字符
+        0x2000, 0x206F, // 常用标点
+        0x3000, 0x30FF, // 日文假名和标点
+        0x31F0, 0x31FF, // 假名扩展
+        0x4e00, 0x9FAF, // CJK 统一表意文字
+        0xFF00, 0xFFEF, // 全角字符
+        0,
+    };
+    io.Fonts->AddFontFromFileTTF("/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf", 
+                                16.0f, &config, ranges);
+
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 

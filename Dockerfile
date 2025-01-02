@@ -13,7 +13,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # 构建环境
 RUN sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list
 RUN apt update
-RUN apt install -y build-essential cmake libssl-dev git gdb libglfw3-dev zenity
+RUN apt install -y build-essential cmake libssl-dev git gdb libglfw3-dev zenity fonts-droid-fallback
 
 # 安装Catch2
 RUN git clone https://github.com/catchorg/Catch2.git --depth=1 && \

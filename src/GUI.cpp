@@ -18,7 +18,7 @@ GUI::GUI() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
     // 创建窗口
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Backup Manager", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "备份管理器", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         throw std::runtime_error("Failed to create GLFW window");
@@ -89,14 +89,16 @@ void GUI::run() {
             render_restore_window();
         if (show_help_)
             render_help_window();
+        if (show_verify_window_)
+            render_verify_window();
             
         // 添加结果弹窗
         if (show_success_) {
-            ImGui::OpenPopup("Success");
+            ImGui::OpenPopup("成功");
         }
-        if (ImGui::BeginPopupModal("Success", &show_success_, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::Text("Operation completed successfully!");
-            if (ImGui::Button("OK")) {
+        if (ImGui::BeginPopupModal("成功", &show_success_, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("操作已成功完成！");
+            if (ImGui::Button("确定")) {
                 show_success_ = false;
                 ImGui::CloseCurrentPopup();
             }
@@ -104,35 +106,21 @@ void GUI::run() {
         }
 
         if (show_error_) {
-            ImGui::OpenPopup("Error");
+            ImGui::OpenPopup("错误");
         }
-        if (ImGui::BeginPopupModal("Error", &show_error_, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Error: %s", error_message_.c_str());
+        if (ImGui::BeginPopupModal("错误", &show_error_, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "错误：%s", error_message_.c_str());
             ImGui::Separator();
-            ImGui::TextWrapped("Check the log window for more details. You can open it from the View menu.");
-            
-            ImGui::Spacing();
-            float button_width = 120;
-            float window_width = ImGui::GetWindowWidth();
-            
-            // 如果日志窗口当前是隐藏的，显示"Show Log"按钮
+            ImGui::TextWrapped("查看日志窗口获取更多详细信息。可以从\"视图\"菜单打开日志窗口。");
             if (!show_log_) {
-                ImGui::SetCursorPosX((window_width - button_width * 2 - ImGui::GetStyle().ItemSpacing.x) / 2);
-                if (ImGui::Button("Show Log", ImVec2(button_width, 0))) {
+                if (ImGui::Button("显示日志")) {
                     show_log_ = true;
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Close", ImVec2(button_width, 0))) {
-                    show_error_ = false;
-                    ImGui::CloseCurrentPopup();
-                }
-            } else {
-                // 如果日志窗口已经显示，只显示"Close"按钮
-                ImGui::SetCursorPosX((window_width - button_width) / 2);
-                if (ImGui::Button("Close", ImVec2(button_width, 0))) {
-                    show_error_ = false;
-                    ImGui::CloseCurrentPopup();
-                }
+            }
+            if (ImGui::Button("关闭")) {
+                show_error_ = false;
+                ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
         }
@@ -160,34 +148,40 @@ void GUI::render_main_window() {
                                   ImGuiWindowFlags_NoMove |
                                   ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    ImGui::Begin("Backup Manager", nullptr, window_flags);
+    ImGui::Begin("备份管理器", nullptr, window_flags);
     
     // Menu Bar
     if (ImGui::BeginMenuBar()) {
-        if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Backup", "Ctrl+B")) {
+        if (ImGui::BeginMenu("文件")) {
+            if (ImGui::MenuItem("备份", "Ctrl+B")) {
+                reset_input_fields();  // 重置输入字段
                 show_backup_window_ = true;
             }
-            if (ImGui::MenuItem("Restore", "Ctrl+R")) {
+            if (ImGui::MenuItem("还原", "Ctrl+R")) {
+                reset_input_fields();  // 重置输入字段
                 show_restore_window_ = true;
             }
+            if (ImGui::MenuItem("验证", "Ctrl+V")) {
+                reset_input_fields();  // 重置输入字段
+                show_verify_window_ = true;
+            }
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit", "Alt+F4")) {
+            if (ImGui::MenuItem("退出", "Alt+F4")) {
                 glfwSetWindowShouldClose(glfwGetCurrentContext(), true);
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Help")) {
-            if (ImGui::MenuItem("Help", "F1")) {
+        if (ImGui::BeginMenu("帮助")) {
+            if (ImGui::MenuItem("帮助文档", "F1")) {
                 show_help_ = true;
             }
-            if (ImGui::MenuItem("About")) {
+            if (ImGui::MenuItem("关于")) {
                 show_about_ = true;
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Log Window", NULL, &show_log_);
+        if (ImGui::BeginMenu("视图")) {
+            ImGui::MenuItem("日志窗口", NULL, &show_log_);
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
@@ -205,8 +199,8 @@ void GUI::render_main_window() {
     
     // Center Title
     float window_width = ImGui::GetWindowWidth();
-    ImGui::SetCursorPosX((window_width - ImGui::CalcTextSize("Backup Manager").x) / 2);
-    ImGui::Text("Backup Manager");
+    ImGui::SetCursorPosX((window_width - ImGui::CalcTextSize("备份管理器").x) / 2);
+    ImGui::Text("备份管理器");
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -214,7 +208,7 @@ void GUI::render_main_window() {
     // Center Button Group
     float button_width = 120;
     float button_height = 40;
-    float buttons_total_width = button_width * 2 + ImGui::GetStyle().ItemSpacing.x;
+    float buttons_total_width = button_width * 3 + ImGui::GetStyle().ItemSpacing.x * 2;
     ImGui::SetCursorPosX((window_width - buttons_total_width) / 2);
 
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
@@ -222,12 +216,19 @@ void GUI::render_main_window() {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.5f, 0.8f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.3f, 0.6f, 1.0f));
     
-    if (ImGui::Button("Backup", ImVec2(button_width, button_height))) {
+    if (ImGui::Button("备份", ImVec2(button_width, button_height))) {
+        reset_input_fields();  // 重置输入字段
         show_backup_window_ = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Restore", ImVec2(button_width, button_height))) {
+    if (ImGui::Button("还原", ImVec2(button_width, button_height))) {
+        reset_input_fields();  // 重置输入字段
         show_restore_window_ = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("验证", ImVec2(button_width, button_height))) {
+        reset_input_fields();  // 重置输入字段
+        show_verify_window_ = true;
     }
 
     ImGui::PopStyleColor(3);
@@ -240,12 +241,12 @@ void GUI::render_main_window() {
         ImGui::Separator();
         
         // 日志工具栏
-        if (ImGui::Button("Clear Log")) {
+        if (ImGui::Button("清除")) {
             log_buffer_.clear();
         }
         ImGui::SameLine();
         static bool auto_scroll = true;
-        ImGui::Checkbox("Auto-scroll", &auto_scroll);
+        ImGui::Checkbox("自动滚动", &auto_scroll);
         
         // 日志内容区域
         ImGui::BeginChild("LogArea", ImVec2(0, log_height - 30), true, 
@@ -306,16 +307,16 @@ std::string GUI::open_file_dialog(bool folder) {
 
 void GUI::render_backup_window() {
     ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Backup", &show_backup_window_, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin("备份", &show_backup_window_, ImGuiWindowFlags_NoCollapse);
     
-    ImGui::Text("Select files or directories to backup:");
+    ImGui::Text("选择要备份的文件或目录：");
     ImGui::Spacing();
     
     // File Selection
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
-    ImGui::InputText("Source Path", input_path_, PATH_BUFFER_SIZE);
+    ImGui::InputText("源路径", input_path_, PATH_BUFFER_SIZE);
     ImGui::SameLine();
-    if (ImGui::Button("Browse...")) {
+    if (ImGui::Button("浏览...")) {
         std::string selected = open_file_dialog(true);  // true for folder selection
         if (!selected.empty()) {
             strncpy(input_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
@@ -323,9 +324,9 @@ void GUI::render_backup_window() {
         }
     }
     
-    ImGui::InputText("Target Path", output_path_, PATH_BUFFER_SIZE);
+    ImGui::InputText("目标路径", output_path_, PATH_BUFFER_SIZE);
     ImGui::SameLine();
-    if (ImGui::Button("Browse...##2")) {
+    if (ImGui::Button("浏览...##2")) {
         std::string selected = open_file_dialog(true);  // true for folder selection
         if (!selected.empty()) {
             strncpy(output_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
@@ -340,12 +341,12 @@ void GUI::render_backup_window() {
     
     // Options
     ImGui::BeginGroup();
-    ImGui::Checkbox("Compress Files", &compress_);
-    ImGui::Checkbox("Encrypt Files", &encrypt_);
+    ImGui::Checkbox("压缩文件", &compress_);
+    ImGui::Checkbox("加密文件", &encrypt_);
     
     if (encrypt_) {
         ImGui::Indent(20);
-        ImGui::InputText("Password", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
+        ImGui::InputText("密码", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
         ImGui::Unindent(20);
     }
     ImGui::EndGroup();
@@ -364,11 +365,11 @@ void GUI::render_backup_window() {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.6f, 0.1f, 1.0f));
     
-    if (ImGui::Button("Start Backup", ImVec2(button_width, 0))) {
+    if (ImGui::Button("开始备份", ImVec2(button_width, 0))) {
         try {
             if (input_path_[0] == '\0' || output_path_[0] == '\0') {
                 show_error_ = true;
-                error_message_ = "Please select both source and target paths";
+                error_message_ = "请选择源路径和目标路径";
                 ImGui::PopStyleColor(3);
                 ImGui::PopStyleVar();
                 ImGui::End();
@@ -377,7 +378,7 @@ void GUI::render_backup_window() {
 
             if (encrypt_ && password_[0] == '\0') {
                 show_error_ = true;
-                error_message_ = "Password is required for encryption";
+                error_message_ = "需要密码进行加密";
                 ImGui::PopStyleColor(3);
                 ImGui::PopStyleVar();
                 ImGui::End();
@@ -397,7 +398,7 @@ void GUI::render_backup_window() {
                 show_backup_window_ = false;  // 成功后关闭备份窗口
             } else {
                 show_error_ = true;
-                error_message_ = "Backup failed";
+                error_message_ = "备份失败";
             }
         } catch (const std::exception& e) {
             show_error_ = true;
@@ -413,15 +414,15 @@ void GUI::render_backup_window() {
 
 void GUI::render_restore_window() {
     ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Restore", &show_restore_window_, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin("还原", &show_restore_window_, ImGuiWindowFlags_NoCollapse);
     
-    ImGui::Text("Select backup file and restore location:");
+    ImGui::Text("选择备份文件和还原位置：");
     ImGui::Spacing();
     
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
-    ImGui::InputText("Backup File", input_path_, PATH_BUFFER_SIZE);
+    ImGui::InputText("备份文件", input_path_, PATH_BUFFER_SIZE);
     ImGui::SameLine();
-    if (ImGui::Button("Browse...")) {
+    if (ImGui::Button("浏览...")) {
         std::string selected = open_file_dialog(false);  // false for file selection
         if (!selected.empty()) {
             strncpy(input_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
@@ -429,9 +430,9 @@ void GUI::render_restore_window() {
         }
     }
     
-    ImGui::InputText("Restore Path", output_path_, PATH_BUFFER_SIZE);
+    ImGui::InputText("还原路径", output_path_, PATH_BUFFER_SIZE);
     ImGui::SameLine();
-    if (ImGui::Button("Browse...##2")) {
+    if (ImGui::Button("浏览...##2")) {
         std::string selected = open_file_dialog(true);  // true for folder selection
         if (!selected.empty()) {
             strncpy(output_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
@@ -447,18 +448,18 @@ void GUI::render_restore_window() {
     // 选项组
     ImGui::BeginGroup();
     // 加密选项
-    ImGui::Checkbox("Encrypted Backup", &encrypt_);
+    ImGui::Checkbox("加密备份", &encrypt_);
     if (encrypt_) {
         ImGui::Indent(20);
-        ImGui::InputText("Password", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
+        ImGui::InputText("密码", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
         ImGui::Unindent(20);
     }
     
     ImGui::Spacing();
     // 添加元数据恢复选项
-    ImGui::Checkbox("Restore Metadata", &restore_metadata_);
+    ImGui::Checkbox("还原元数据", &restore_metadata_);
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Restore file attributes, timestamps, and permissions");
+        ImGui::SetTooltip("还原文件属性、时间戳和权限");
     }
     ImGui::EndGroup();
     
@@ -475,11 +476,11 @@ void GUI::render_restore_window() {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.6f, 0.1f, 1.0f));
     
-    if (ImGui::Button("Start Restore", ImVec2(button_width, 0))) {
+    if (ImGui::Button("开始还原", ImVec2(button_width, 0))) {
         try {
             if (input_path_[0] == '\0' || output_path_[0] == '\0') {
                 show_error_ = true;
-                error_message_ = "Please select both backup file and restore path";
+                error_message_ = "请选择备份文件和还原路径";
                 ImGui::PopStyleColor(3);
                 ImGui::PopStyleVar();
                 ImGui::End();
@@ -489,7 +490,7 @@ void GUI::render_restore_window() {
             if (encrypt_) {
                 if (password_[0] == '\0') {
                     show_error_ = true;
-                    error_message_ = "Password is required for encrypted backup";
+                    error_message_ = "需要密码进行加密备份";
                     ImGui::PopStyleColor(3);
                     ImGui::PopStyleVar();
                     ImGui::End();
@@ -508,7 +509,7 @@ void GUI::render_restore_window() {
                 show_restore_window_ = false;  // 成功后关闭还原窗口
             } else {
                 show_error_ = true;
-                error_message_ = "Restore failed";
+                error_message_ = "还原失败";
             }
         } catch (const std::exception& e) {
             show_error_ = true;
@@ -524,17 +525,17 @@ void GUI::render_restore_window() {
 
 void GUI::render_log_window() {
     ImGui::SetNextWindowSize(ImVec2(500, 200), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Log", &show_log_);
+    ImGui::Begin("日志", &show_log_);
     
     // 添加清除按钮
-    if (ImGui::Button("Clear")) {
+    if (ImGui::Button("清除")) {
         log_buffer_.clear();
     }
     ImGui::SameLine();
     
     // 添加自动滚动选项
     static bool auto_scroll = true;
-    ImGui::Checkbox("Auto-scroll", &auto_scroll);
+    ImGui::Checkbox("自动滚动", &auto_scroll);
     
     ImGui::Separator();
     
@@ -574,7 +575,7 @@ void GUI::render_log_window() {
 
 void GUI::render_help_window() {
     ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Help", &show_help_, ImGuiWindowFlags_NoCollapse)) {
+    if (!ImGui::Begin("帮助", &show_help_, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;
     }
@@ -583,54 +584,158 @@ void GUI::render_help_window() {
 
     // 使用标题样式
     ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::Text("Backup Manager Help");
+    ImGui::Text("备份管理器帮助");
     ImGui::PopFont();
     ImGui::Separator();
     ImGui::Spacing();
 
     // 基本操作部分
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Basic Operations");
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "基本操作");
     ImGui::Spacing();
-    ImGui::BulletText("Backup: Create a backup of files or directories");
-    ImGui::BulletText("Restore: Restore files from a backup");
+    ImGui::BulletText("备份：创建文件或目录的备份");
+    ImGui::BulletText("还原：从备份中恢复文件");
+    ImGui::BulletText("验证：检查备份文件的完整性");
     ImGui::Spacing();
 
     // 备份功能部分
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Backup Features");
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "备份功能");
     ImGui::Spacing();
-    ImGui::BulletText("Compression: Reduce backup size");
-    ImGui::BulletText("Encryption: Protect your data with a password");
-    ImGui::BulletText("File Selection: Choose specific files or directories to backup");
+    ImGui::BulletText("压缩：减小备份文件大小");
+    ImGui::BulletText("加密：使用密码保护数据");
+    ImGui::BulletText("文件选择：选择特定文件或目录进行备份");
     ImGui::Spacing();
 
     // 还原功能部分
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Restore Features");
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "还原功能");
     ImGui::Spacing();
-    ImGui::BulletText("Metadata Restoration: Preserve file attributes and timestamps");
-    ImGui::BulletText("Password Protection: Decrypt encrypted backups");
+    ImGui::BulletText("元数据还原：保留文件属性和时间戳");
+    ImGui::BulletText("密码保护：解密加密的备份");
     ImGui::Spacing();
 
     // 快捷键部分
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Keyboard Shortcuts");
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "快捷键");
     ImGui::Spacing();
     ImGui::Columns(2, "shortcuts");
     ImGui::SetColumnWidth(0, 150);
-    ImGui::Text("Ctrl+B"); ImGui::NextColumn(); ImGui::Text("Open Backup Window"); ImGui::NextColumn();
-    ImGui::Text("Ctrl+R"); ImGui::NextColumn(); ImGui::Text("Open Restore Window"); ImGui::NextColumn();
-    ImGui::Text("F1"); ImGui::NextColumn(); ImGui::Text("Show Help"); ImGui::NextColumn();
-    ImGui::Text("Alt+F4"); ImGui::NextColumn(); ImGui::Text("Exit Application"); ImGui::NextColumn();
+    ImGui::Text("Ctrl+B"); ImGui::NextColumn(); ImGui::Text("打开备份窗口"); ImGui::NextColumn();
+    ImGui::Text("Ctrl+R"); ImGui::NextColumn(); ImGui::Text("打开还原窗口"); ImGui::NextColumn();
+    ImGui::Text("F1"); ImGui::NextColumn(); ImGui::Text("显示帮助"); ImGui::NextColumn();
+    ImGui::Text("Alt+F4"); ImGui::NextColumn(); ImGui::Text("退出程序"); ImGui::NextColumn();
     ImGui::Columns(1);
     ImGui::Spacing();
 
     // 注意事项部分
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Important Notes");
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "注意事项");
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.6f, 1.0f));
-    ImGui::TextWrapped("• Keep your encryption password safe. Lost passwords cannot be recovered.");
-    ImGui::TextWrapped("• Ensure sufficient disk space for backup operations.");
-    ImGui::TextWrapped("• Check the log window for detailed operation information.");
+    ImGui::TextWrapped("! 请妥善保管加密密码，丢失的密码无法恢复");
+    ImGui::TextWrapped("! 确保有足够的磁盘空间进行备份操作");
+    ImGui::TextWrapped("! 查看日志窗口获取详细的操作信息");
     ImGui::PopStyleColor();
 
     ImGui::PopStyleVar();
     ImGui::End();
+}
+
+void GUI::render_verify_window() {
+    ImGui::SetNextWindowSize(ImVec2(500, 200), ImGuiCond_FirstUseEver);
+    ImGui::Begin("验证备份", &show_verify_window_, ImGuiWindowFlags_NoCollapse);
+    
+    ImGui::Text("选择要验证的备份文件：");
+    ImGui::Spacing();
+    
+    // 文件选择
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
+    ImGui::InputText("备份文件", input_path_, PATH_BUFFER_SIZE);
+    ImGui::SameLine();
+    if (ImGui::Button("浏览...")) {
+        std::string selected = open_file_dialog(false);  // false for file selection
+        if (!selected.empty()) {
+            strncpy(input_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
+            input_path_[PATH_BUFFER_SIZE - 1] = '\0';
+        }
+    }
+    ImGui::PopStyleVar();
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    // 加密选项
+    ImGui::BeginGroup();
+    ImGui::Checkbox("加密备份", &encrypt_);
+    if (encrypt_) {
+        ImGui::Indent(20);
+        ImGui::InputText("密码", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
+        ImGui::Unindent(20);
+    }
+    ImGui::EndGroup();
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    // 验证按钮
+    float button_width = 120;
+    float window_width = ImGui::GetWindowWidth();
+    ImGui::SetCursorPosX((window_width - button_width) / 2);
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.6f, 0.1f, 1.0f));
+    
+    if (ImGui::Button("开始验证", ImVec2(button_width, 0))) {
+        try {
+            if (input_path_[0] == '\0') {
+                show_error_ = true;
+                error_message_ = "请选择要验证的备份文件";
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar();
+                ImGui::End();
+                return;
+            }
+
+            if (encrypt_) {
+                if (password_[0] == '\0') {
+                    show_error_ = true;
+                    error_message_ = "需要密码验证加密备份";
+                    ImGui::PopStyleColor(3);
+                    ImGui::PopStyleVar();
+                    ImGui::End();
+                    return;
+                }
+                packer_.set_encrypt(true, password_);
+            } else {
+                packer_.set_encrypt(false, "");
+            }
+            
+            if (packer_.Verify(input_path_)) {
+                show_success_ = true;
+                error_message_ = "备份文件验证通过";
+                show_verify_window_ = false;  // 成功后关闭验证窗口
+            } else {
+                show_error_ = true;
+                error_message_ = "备份文件验证失败";
+            }
+        } catch (const std::exception& e) {
+            show_error_ = true;
+            error_message_ = e.what();
+        }
+    }
+    
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    
+    ImGui::End();
+}
+
+// 添加重置函数
+void GUI::reset_input_fields() {
+    input_path_[0] = '\0';
+    output_path_[0] = '\0';
+    password_[0] = '\0';
+    compress_ = false;
+    encrypt_ = false;
+    restore_metadata_ = false;
 } 

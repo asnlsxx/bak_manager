@@ -44,6 +44,7 @@ private:
     void render_restore_window();
     void render_log_window();
     void render_help_window();
+    void render_verify_window();
     
     static constexpr size_t PATH_BUFFER_SIZE = 256;
     static constexpr size_t PASSWORD_BUFFER_SIZE = 64;
@@ -62,6 +63,7 @@ private:
     bool show_error_ = false;
     bool show_log_ = true;
     bool show_help_ = false;
+    bool show_verify_window_ = false;
     std::string error_message_;
     
     std::vector<std::string> log_buffer_;
@@ -69,6 +71,7 @@ private:
     
     std::string open_file_dialog(bool folder = false);
     bool restore_metadata_ = false;  // 是否恢复元数据
+    void reset_input_fields();  // 添加重置函数声明
 };
 
 #endif // GUI_H 

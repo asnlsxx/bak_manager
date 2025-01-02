@@ -492,7 +492,7 @@ void GUI::render_restore_window() {
     // 选项组
     ImGui::BeginGroup();
     // 加密选项
-    ImGui::Checkbox("加密备份", &encrypt_);
+    ImGui::Checkbox("解密", &encrypt_);
     if (encrypt_) {
         ImGui::Indent(20);
         ImGui::InputText("密码", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
@@ -709,12 +709,7 @@ void GUI::render_verify_window() {
     
     // 加密选项
     ImGui::BeginGroup();
-    ImGui::Checkbox("加密备份", &encrypt_);
-    if (encrypt_) {
-        ImGui::Indent(20);
-        ImGui::InputText("密码", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
-        ImGui::Unindent(20);
-    }
+
     ImGui::EndGroup();
     
     ImGui::Spacing();
@@ -740,20 +735,6 @@ void GUI::render_verify_window() {
                 ImGui::PopStyleVar();
                 ImGui::End();
                 return;
-            }
-
-            if (encrypt_) {
-                if (password_[0] == '\0') {
-                    show_error_ = true;
-                    error_message_ = "需要密码验证加密备份";
-                    ImGui::PopStyleColor(3);
-                    ImGui::PopStyleVar();
-                    ImGui::End();
-                    return;
-                }
-                packer_.set_encrypt(true, password_);
-            } else {
-                packer_.set_encrypt(false, "");
             }
             
             if (packer_.Verify(input_path_)) {

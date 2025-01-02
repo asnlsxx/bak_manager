@@ -87,6 +87,8 @@ void GUI::run() {
             render_backup_window();
         if (show_restore_window_)
             render_restore_window();
+        if (show_help_)
+            render_help_window();
             
         // 添加结果弹窗
         if (show_success_) {
@@ -105,10 +107,32 @@ void GUI::run() {
             ImGui::OpenPopup("Error");
         }
         if (ImGui::BeginPopupModal("Error", &show_error_, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::Text("Error: %s", error_message_.c_str());
-            if (ImGui::Button("OK")) {
-                show_error_ = false;
-                ImGui::CloseCurrentPopup();
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Error: %s", error_message_.c_str());
+            ImGui::Separator();
+            ImGui::TextWrapped("Check the log window for more details. You can open it from the View menu.");
+            
+            ImGui::Spacing();
+            float button_width = 120;
+            float window_width = ImGui::GetWindowWidth();
+            
+            // 如果日志窗口当前是隐藏的，显示"Show Log"按钮
+            if (!show_log_) {
+                ImGui::SetCursorPosX((window_width - button_width * 2 - ImGui::GetStyle().ItemSpacing.x) / 2);
+                if (ImGui::Button("Show Log", ImVec2(button_width, 0))) {
+                    show_log_ = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Close", ImVec2(button_width, 0))) {
+                    show_error_ = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            } else {
+                // 如果日志窗口已经显示，只显示"Close"按钮
+                ImGui::SetCursorPosX((window_width - button_width) / 2);
+                if (ImGui::Button("Close", ImVec2(button_width, 0))) {
+                    show_error_ = false;
+                    ImGui::CloseCurrentPopup();
+                }
             }
             ImGui::EndPopup();
         }
@@ -154,6 +178,9 @@ void GUI::render_main_window() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("Help", "F1")) {
+                show_help_ = true;
+            }
             if (ImGui::MenuItem("About")) {
                 show_about_ = true;
             }
@@ -250,9 +277,9 @@ void GUI::render_main_window() {
 std::string GUI::open_file_dialog(bool folder) {
     std::string command;
     if (folder) {
-        command = "zenity --file-selection --directory";
+        command = "zenity --file-selection --directory 2>/dev/null";
     } else {
-        command = "zenity --file-selection";
+        command = "zenity --file-selection 2>/dev/null";
     }
     
     FILE* pipe = popen(command.c_str(), "r");
@@ -417,14 +444,21 @@ void GUI::render_restore_window() {
     ImGui::Separator();
     ImGui::Spacing();
     
-    // Add encryption checkbox and password input
+    // 选项组
     ImGui::BeginGroup();
+    // 加密选项
     ImGui::Checkbox("Encrypted Backup", &encrypt_);
-    
     if (encrypt_) {
         ImGui::Indent(20);
         ImGui::InputText("Password", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
         ImGui::Unindent(20);
+    }
+    
+    ImGui::Spacing();
+    // 添加元数据恢复选项
+    ImGui::Checkbox("Restore Metadata", &restore_metadata_);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Restore file attributes, timestamps, and permissions");
     }
     ImGui::EndGroup();
     
@@ -465,6 +499,9 @@ void GUI::render_restore_window() {
             } else {
                 packer_.set_encrypt(false, "");
             }
+            
+            // 设置元数据恢复选项
+            packer_.set_restore_metadata(restore_metadata_);
             
             if (packer_.Unpack(input_path_, output_path_)) {
                 show_success_ = true;
@@ -516,7 +553,7 @@ void GUI::render_log_window() {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
         else
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
-            
+                
         ImGui::TextUnformatted(line.c_str());
         ImGui::PopStyleColor();
     }
@@ -533,4 +570,67 @@ void GUI::render_log_window() {
         log_buffer_.erase(log_buffer_.begin(), 
                          log_buffer_.begin() + (log_buffer_.size() - MAX_LOG_LINES));
     }
+}
+
+void GUI::render_help_window() {
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Help", &show_help_, ImGuiWindowFlags_NoCollapse)) {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 10));
+
+    // 使用标题样式
+    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
+    ImGui::Text("Backup Manager Help");
+    ImGui::PopFont();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // 基本操作部分
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Basic Operations");
+    ImGui::Spacing();
+    ImGui::BulletText("Backup: Create a backup of files or directories");
+    ImGui::BulletText("Restore: Restore files from a backup");
+    ImGui::Spacing();
+
+    // 备份功能部分
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Backup Features");
+    ImGui::Spacing();
+    ImGui::BulletText("Compression: Reduce backup size");
+    ImGui::BulletText("Encryption: Protect your data with a password");
+    ImGui::BulletText("File Selection: Choose specific files or directories to backup");
+    ImGui::Spacing();
+
+    // 还原功能部分
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Restore Features");
+    ImGui::Spacing();
+    ImGui::BulletText("Metadata Restoration: Preserve file attributes and timestamps");
+    ImGui::BulletText("Password Protection: Decrypt encrypted backups");
+    ImGui::Spacing();
+
+    // 快捷键部分
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Keyboard Shortcuts");
+    ImGui::Spacing();
+    ImGui::Columns(2, "shortcuts");
+    ImGui::SetColumnWidth(0, 150);
+    ImGui::Text("Ctrl+B"); ImGui::NextColumn(); ImGui::Text("Open Backup Window"); ImGui::NextColumn();
+    ImGui::Text("Ctrl+R"); ImGui::NextColumn(); ImGui::Text("Open Restore Window"); ImGui::NextColumn();
+    ImGui::Text("F1"); ImGui::NextColumn(); ImGui::Text("Show Help"); ImGui::NextColumn();
+    ImGui::Text("Alt+F4"); ImGui::NextColumn(); ImGui::Text("Exit Application"); ImGui::NextColumn();
+    ImGui::Columns(1);
+    ImGui::Spacing();
+
+    // 注意事项部分
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Important Notes");
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.6f, 1.0f));
+    ImGui::TextWrapped("• Keep your encryption password safe. Lost passwords cannot be recovered.");
+    ImGui::TextWrapped("• Ensure sufficient disk space for backup operations.");
+    ImGui::TextWrapped("• Check the log window for detailed operation information.");
+    ImGui::PopStyleColor();
+
+    ImGui::PopStyleVar();
+    ImGui::End();
 } 

@@ -43,6 +43,7 @@ private:
     void render_backup_window();
     void render_restore_window();
     void render_log_window();
+    void render_help_window();
     
     static constexpr size_t PATH_BUFFER_SIZE = 256;
     static constexpr size_t PASSWORD_BUFFER_SIZE = 64;
@@ -60,12 +61,14 @@ private:
     bool show_success_ = false;
     bool show_error_ = false;
     bool show_log_ = true;
+    bool show_help_ = false;
     std::string error_message_;
     
     std::vector<std::string> log_buffer_;
     std::shared_ptr<GuiLogSinkMt> log_sink_;
     
     std::string open_file_dialog(bool folder = false);
+    bool restore_metadata_ = false;  // 是否恢复元数据
 };
 
 #endif // GUI_H 

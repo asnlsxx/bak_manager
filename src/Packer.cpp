@@ -51,6 +51,7 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
         std::vector<char> final_data;
         if (compress_) {
             // 压缩数据
+            spdlog::info("压缩数据");
             final_data = LZWCompression::compress({file_data.data(), file_data.size()});
         } else {
             final_data = std::move(file_data);
@@ -58,6 +59,7 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
 
         if (encrypt_) {
             // 加密数据
+            spdlog::info("加密数据");
             final_data = aes_->encrypt({final_data.data(), final_data.size()});
         }
 
@@ -147,6 +149,7 @@ bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
 
         std::vector<char> final_data;
         if (stored_header.mod & MOD_ENCRYPTED) {
+            spdlog::info("解密数据");
             if (!aes_) {
                 throw std::runtime_error("需要解密密钥");
             }
@@ -157,6 +160,7 @@ bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
         }
 
         if (stored_header.mod & MOD_COMPRESSED) {
+            spdlog::info("解压数据");
             // 再解压
             final_data = LZWCompression::decompress(final_data.data(), final_data.size());
         }

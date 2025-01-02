@@ -10,11 +10,19 @@ void initialize_logger(bool verbose) {
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("backup.log", true);
 
+    // 设置控制台输出的日志级别
+    console_sink->set_level(verbose ? spdlog::level::info : spdlog::level::err);
+    
+    // 文件日志保持详细记录
+    file_sink->set_level(spdlog::level::debug);
+
     auto logger = std::make_shared<spdlog::logger>(
         "backup_logger", spdlog::sinks_init_list{console_sink, file_sink});
 
     logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%s:%#] %v");
-    logger->set_level(verbose ? spdlog::level::debug : spdlog::level::info);
+    
+    // 设置全局日志级别为最低级别，让单个sink控制显示
+    logger->set_level(spdlog::level::trace);
 
     spdlog::set_default_logger(logger);
   } catch (const spdlog::spdlog_ex &ex) {

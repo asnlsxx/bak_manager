@@ -33,6 +33,12 @@ GUI::GUI() {
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
+
+    // 初始化日志系统
+    log_sink_ = std::make_shared<GuiLogSinkMt>(log_buffer_);
+    auto logger = std::make_shared<spdlog::logger>("gui_logger", log_sink_);
+    logger->set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
+    spdlog::set_default_logger(logger);
 }
 
 GUI::~GUI() {
@@ -129,10 +135,21 @@ void GUI::render_main_window() {
             }
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Log Window", NULL, &show_log_);
+            ImGui::EndMenu();
+        }
         ImGui::EndMenuBar();
     }
 
-    // Main Content
+    // 计算主内容区域和日志区域的高度
+    float total_height = ImGui::GetContentRegionAvail().y;
+    float log_height = show_log_ ? total_height * 0.4f : 0;  // 日志窗口占40%高度
+    float main_content_height = total_height - log_height;
+
+    // 主内容区域
+    ImGui::BeginChild("MainContent", ImVec2(0, main_content_height), false);
+    
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 20);
     
     // Center Title
@@ -164,6 +181,44 @@ void GUI::render_main_window() {
 
     ImGui::PopStyleColor(3);
     ImGui::PopStyleVar();
+    
+    ImGui::EndChild();
+
+    // 如果启用了日志窗口，在主窗口下方直接渲染日志内容
+    if (show_log_) {
+        ImGui::Separator();
+        
+        // 日志工具栏
+        if (ImGui::Button("Clear Log")) {
+            log_buffer_.clear();
+        }
+        ImGui::SameLine();
+        static bool auto_scroll = true;
+        ImGui::Checkbox("Auto-scroll", &auto_scroll);
+        
+        // 日志内容区域
+        ImGui::BeginChild("LogArea", ImVec2(0, log_height - 30), true, 
+                         ImGuiWindowFlags_HorizontalScrollbar);
+        
+        for (const auto& line : log_buffer_) {
+            if (line.find("[error]") != std::string::npos)
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+            else if (line.find("[warn]") != std::string::npos)
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.6f, 1.0f));
+            else if (line.find("[info]") != std::string::npos)
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
+            else
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+                
+            ImGui::TextUnformatted(line.c_str());
+            ImGui::PopStyleColor();
+        }
+        
+        if (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f);
+        
+        ImGui::EndChild();
+    }
 
     ImGui::End();
 }
@@ -404,4 +459,54 @@ void GUI::render_restore_window() {
     ImGui::PopStyleVar();
     
     ImGui::End();
+}
+
+void GUI::render_log_window() {
+    ImGui::SetNextWindowSize(ImVec2(500, 200), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Log", &show_log_);
+    
+    // 添加清除按钮
+    if (ImGui::Button("Clear")) {
+        log_buffer_.clear();
+    }
+    ImGui::SameLine();
+    
+    // 添加自动滚动选项
+    static bool auto_scroll = true;
+    ImGui::Checkbox("Auto-scroll", &auto_scroll);
+    
+    ImGui::Separator();
+    
+    // 创建日志区域
+    ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, 
+                      ImGuiWindowFlags_HorizontalScrollbar);
+    
+    // 显示日志内容
+    for (const auto& line : log_buffer_) {
+        // 根据日志级别设置颜色
+        if (line.find("[error]") != std::string::npos)
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+        else if (line.find("[warn]") != std::string::npos)
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.6f, 1.0f));
+        else if (line.find("[info]") != std::string::npos)
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
+        else
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+            
+        ImGui::TextUnformatted(line.c_str());
+        ImGui::PopStyleColor();
+    }
+    
+    // 自动滚动到底部
+    if (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+        ImGui::SetScrollHereY(1.0f);
+    
+    ImGui::EndChild();
+    ImGui::End();
+    
+    // 限制日志行数
+    if (log_buffer_.size() > MAX_LOG_LINES) {
+        log_buffer_.erase(log_buffer_.begin(), 
+                         log_buffer_.begin() + (log_buffer_.size() - MAX_LOG_LINES));
+    }
 } 

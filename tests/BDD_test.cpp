@@ -327,38 +327,156 @@ SCENARIO_METHOD(TestFixture, "备份时的文件过滤功能",
 
             fs::remove_all(restore_dir);
         }
+    }
+}
 
-        // WHEN("按路径过滤") {
-        //     cmdline::parser parser;
-        //     ParserConfig::configure_parser(parser);
-        //     const char* args[] = {
-        //         "program",
-        //         "-b",
-        //         "-i", test_dir.string().c_str(),
-        //         "-o", backup_dir.string().c_str(),
-        //         "--path", "dir1/.*",  // 只备份dir1目录下的文件
-        //     };
-        //     parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+SCENARIO_METHOD(TestFixture, "按文件类型过滤 - 仅符号链接",
+                "[backup][filter][type]") {
+    GIVEN("一个包含多种类型文件的目录") {
+        std::vector<TestFile> files = {
+            {"file1.txt", TestFileType::Regular, "普通文件1"},
+            {"file2.txt", TestFileType::Regular, "普通文件2"},
+            {"dir1", TestFileType::Directory},
+            {"dir1/file3.txt", TestFileType::Regular, "普通文件3"},
+            {"link1", TestFileType::Symlink, "", "file1.txt"},
+            {"dir1/link2", TestFileType::Symlink, "", "../file2.txt"},
+            {"pipe1", TestFileType::FIFO}
+        };
+        create_test_structure(files);
 
-        //     Packer packer;
-        //     packer.set_filter(ParserConfig::create_filter(parser));
+        WHEN("仅过滤符号链接") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program",
+                "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--type", "l"  // 只备份符号链接
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
             
-        //     fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
-        //     REQUIRE(packer.Pack(test_dir, backup_path) == true);
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
 
-        //     // 恢复并验证
-        //     fs::path restore_dir = fs::absolute("restored_data");
-        //     packer.Unpack(backup_path, restore_dir);
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
             
-        //     fs::path project_dir = restore_dir / test_dir.filename();
-        //     // 验证只有dir1目录下的文件被备份
-        //     REQUIRE_FALSE(fs::exists(project_dir / "file1.txt"));
-        //     REQUIRE(fs::exists(project_dir / "dir1/file3.txt"));
-        //     REQUIRE(fs::exists(project_dir / "dir1/pipe1"));
-        //     REQUIRE_FALSE(fs::exists(project_dir / "dir2/file4.log"));
+            fs::path project_dir = restore_dir / test_dir.filename();
+            // 验证只有符号链接被备份
+            REQUIRE_FALSE(fs::exists(project_dir / "file1.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "file2.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "dir1/file3.txt"));
+            REQUIRE(fs::read_symlink(project_dir / "link1") == "file1.txt");
+            REQUIRE(fs::read_symlink(project_dir / "dir1/link2") == "../file2.txt");
+            REQUIRE_FALSE(fs::exists(project_dir / "pipe1"));
 
-        //     fs::remove_all(restore_dir);
-        // }
+            fs::remove_all(restore_dir);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "按文件类型过滤 - 仅管道文件",
+                "[backup][filter][type]") {
+    GIVEN("一个包含多种类型文件的目录") {
+        std::vector<TestFile> files = {
+            {"file1.txt", TestFileType::Regular, "普通文件1"},
+            {"dir1", TestFileType::Directory},
+            {"dir1/file2.txt", TestFileType::Regular, "普通文件2"},
+            {"link1", TestFileType::Symlink, "", "file1.txt"},
+            {"pipe1", TestFileType::FIFO},
+            {"dir1/pipe2", TestFileType::FIFO}
+        };
+        create_test_structure(files);
+
+        WHEN("仅过滤管道文件") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program",
+                "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--type", "p"  // 只备份管道文件
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
+            
+            fs::path project_dir = restore_dir / test_dir.filename();
+            
+            // 验证只有管道文件被备份
+            REQUIRE_FALSE(fs::exists(project_dir / "file1.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "dir1/file2.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "link1"));
+            REQUIRE(fs::exists(project_dir / "pipe1"));
+            REQUIRE(fs::exists(project_dir / "dir1/pipe2"));
+
+            fs::remove_all(restore_dir);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "按文件类型过滤 - 符号链接和管道文件组合",
+                "[backup][filter][type]") {
+    GIVEN("一个包含多种类型文件的目录") {
+        std::vector<TestFile> files = {
+            {"file1.txt", TestFileType::Regular, "普通文件1"},
+            {"dir1", TestFileType::Directory},
+            {"dir1/file2.txt", TestFileType::Regular, "普通文件2"},
+            {"link1", TestFileType::Symlink, "", "file1.txt"},
+            {"dir1/link2", TestFileType::Symlink, "", "../file1.txt"},
+            {"pipe1", TestFileType::FIFO},
+            {"dir1/pipe2", TestFileType::FIFO}
+        };
+        create_test_structure(files);
+
+        WHEN("过滤符号链接和管道文件") {
+            cmdline::parser parser;
+            ParserConfig::configure_parser(parser);
+            const char* args[] = {
+                "program",
+                "-b",
+                "-i", test_dir.string().c_str(),
+                "-o", backup_dir.string().c_str(),
+                "--type", "lp"  // 备份符号链接和管道文件
+            };
+            parser.parse_check(sizeof(args) / sizeof(args[0]), const_cast<char**>(args));
+
+            Packer packer;
+            packer.set_filter(ParserConfig::create_filter(parser));
+            
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 恢复并验证
+            fs::path restore_dir = fs::absolute("restored_data");
+            packer.Unpack(backup_path, restore_dir);
+            
+            fs::path project_dir = restore_dir / test_dir.filename();
+            
+            // 验证只有符号链接和管道文件被备份
+            REQUIRE_FALSE(fs::exists(project_dir / "file1.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "dir1/file2.txt"));
+            REQUIRE(fs::read_symlink(project_dir / "link1") == "file1.txt");
+            REQUIRE(fs::read_symlink(project_dir / "dir1/link2") == "../file1.txt");
+            REQUIRE(fs::exists(project_dir / "pipe1"));
+            REQUIRE(fs::exists(project_dir / "dir1/pipe2"));
+
+            fs::remove_all(restore_dir);
+        }
     }
 }
 
@@ -904,4 +1022,3 @@ SCENARIO_METHOD(TestFixture, "测试验证功能在不同模式下的表现",
         }
     }
 }
-

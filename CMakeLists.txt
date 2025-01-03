@@ -34,35 +34,48 @@ include_directories(
     ${IMGUI_DIR}/backends
 )
 
-# 添加源文件
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+# 创建核心库（不包含GUI）
+add_library(core STATIC
+    src/Packer.cpp
+    src/FileHandler.cpp
+    src/ArgParser.cpp
+    src/Compression.cpp
+    src/aes.cpp
+)
 
-# 创建库
-add_library(packer STATIC ${SOURCES})
-
-# 链接 OpenSSL 到 packer
-target_link_libraries(packer
+# 链接核心库的依赖
+target_link_libraries(core
     PRIVATE
     OpenSSL::Crypto
+)
+
+# 创建GUI库
+add_library(gui STATIC
+    src/GUI.cpp
+    ${IMGUI_SOURCES}
+)
+
+# 链接GUI库的依赖
+target_link_libraries(gui
+    PRIVATE
+    core
     glfw
     OpenGL::GL
 )
 
 # 创建可执行文件
-add_executable(BackupManager src/main.cpp ${IMGUI_SOURCES})
+add_executable(BackupManager src/main.cpp)
 
 # 链接库到可执行文件
 target_link_libraries(BackupManager
     PRIVATE 
-    packer
-    OpenSSL::Crypto
-    glfw
-    OpenGL::GL
+    core
+    gui
 )
 
-# 如果需要链接文件系统库（在某些系统上可能需要）
+# 如果需要链接文件系统库
 if(UNIX AND NOT APPLE)
-    target_link_libraries(BackupManager
+    target_link_libraries(core
         PRIVATE
         stdc++fs
     )
@@ -70,7 +83,7 @@ endif()
 
 # 添加安装规则
 install(TARGETS BackupManager DESTINATION bin)
-install(TARGETS packer DESTINATION lib)
+install(TARGETS core gui DESTINATION lib)
 install(FILES include/Packer.h DESTINATION include)
 
 # 添加测试支持
@@ -81,14 +94,25 @@ find_package(Catch2 3 REQUIRED)
 
 # 添加BDD测试可执行文件
 add_executable(BDD_test tests/BDD_test.cpp)
-
-# 链接必要的库
 target_link_libraries(BDD_test 
     PRIVATE 
     Catch2::Catch2WithMain
-    packer
+    core
+)
+
+# 添加单元测试可执行文件
+add_executable(unit_tests
+    tests/AESModule_test.cpp
+    tests/LZWCompression_test.cpp
+    tests/ArgParser_test.cpp
+)
+target_link_libraries(unit_tests 
+    PRIVATE
+    Catch2::Catch2WithMain
+    core
 )
 
 # 将测试添加到CTest
 include(Catch)
 catch_discover_tests(BDD_test)
+catch_discover_tests(unit_tests)

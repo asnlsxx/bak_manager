@@ -53,10 +53,9 @@ std::vector<char> compress(const std::string_view& data) {
 }
 
 std::vector<char> decompress(const char* data, size_t size) {
-    if (size < sizeof(size_t)) {
+    if (size <= sizeof(size_t)) {
         return {};
     }
-    
     // 读取压缩数据大小
     size_t comp_size;
     std::memcpy(&comp_size, data, sizeof(size_t));

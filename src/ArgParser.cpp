@@ -248,9 +248,9 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
       return true;
     };
 
-    if (!check_time(parser.get<std::string>("atime"), st.st_atim)) return false;
-    if (!check_time(parser.get<std::string>("mtime"), st.st_mtim)) return false;
-    if (!check_time(parser.get<std::string>("ctime"), st.st_ctim)) return false;
+    if (parser.exist("atime") && !check_time(parser.get<std::string>("atime"), st.st_atim)) return false;
+    if (parser.exist("mtime") && !check_time(parser.get<std::string>("mtime"), st.st_mtim)) return false;
+    if (parser.exist("ctime") && !check_time(parser.get<std::string>("ctime"), st.st_ctim)) return false;
 
     // 大小过滤
     if (parser.exist("size")) {

@@ -132,31 +132,32 @@ bool Packer::PackToFile(const fs::path& source_path, const fs::path& target_path
 
 bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
     try {
+        spdlog::info("开始解包: {} -> {}", backup_path.string(), restore_path.string());
+
         // 读取备份文件
         std::ifstream backup_file(backup_path, std::ios::binary);
         if (!backup_file) {
             throw std::runtime_error("无法打开备份文件: " + backup_path.string());
         }
-
+        if (!fs::exists(restore_path)) {
+            fs::create_directories(restore_path);
+        }
         // 读取header
         BackupHeader stored_header;
         backup_file.read(reinterpret_cast<char*>(&stored_header), sizeof(BackupHeader));
 
         // 读取剩余数据
-        std::vector<char> file_data((std::istreambuf_iterator<char>(backup_file)),
+        std::vector<char> final_data((std::istreambuf_iterator<char>(backup_file)),
                                    std::istreambuf_iterator<char>());
         backup_file.close();
 
-        std::vector<char> final_data;
         if (stored_header.mod & MOD_ENCRYPTED) {
             spdlog::info("解密数据");
             if (!aes_) {
                 throw std::runtime_error("需要解密密钥");
             }
             // 先解密
-            final_data = aes_->decrypt(file_data.data(), file_data.size());
-        } else {
-            final_data = std::move(file_data);
+            final_data = aes_->decrypt(final_data.data(), final_data.size());
         }
 
         if (stored_header.mod & MOD_COMPRESSED) {
@@ -172,11 +173,6 @@ bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
         if (!temp_file) {
             throw std::runtime_error("无法创建临时文件");
         }
-
-        // 写入文件头（不包含压缩标志）
-        BackupHeader temp_header = stored_header;
-        temp_header.mod &= ~MOD_COMPRESSED;  // 清除压缩标志
-        temp_file.write(reinterpret_cast<const char*>(&temp_header), sizeof(BackupHeader));
 
         // 写入解压后的数据
         temp_file.write(final_data.data(), final_data.size());
@@ -195,16 +191,11 @@ bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
 
 // 将原来的Unpack函数重命名为UnpackFromFile
 bool Packer::UnpackFromFile(const fs::path& backup_path, const fs::path& restore_path) {
-    spdlog::info("开始解包: {} -> {}", backup_path.string(), restore_path.string());
     try {
         std::ifstream backup_file(backup_path, std::ios::binary);
         if (!backup_file) {
             throw std::runtime_error("无法打开备份文件: " + backup_path.string());
         }
-
-        // 读取备份信息（并跳过）
-        BackupHeader stored_header;
-        backup_file.read(reinterpret_cast<char*>(&stored_header), sizeof(BackupHeader));
         
         // 在目标路径下创建以备份文件名命名的文件夹
         fs::path project_dir = restore_path / backup_path.stem();

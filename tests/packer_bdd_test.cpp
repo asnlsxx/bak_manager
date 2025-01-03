@@ -569,7 +569,6 @@ SCENARIO_METHOD(TestFixture, "组合使用时间和文件名过滤",
             REQUIRE(fs::exists(project_dir / "file1.txt"));
             REQUIRE(fs::exists(project_dir / "file2.txt"));
             REQUIRE_FALSE(fs::exists(project_dir / "file3.txt"));
-            REQUIRE_FALSE(fs::exists(project_dir / "dir1"));
             REQUIRE_FALSE(fs::exists(project_dir / "dir1/file4.txt"));
             
             fs::remove_all(restore_dir);

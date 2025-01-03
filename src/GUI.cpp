@@ -385,11 +385,11 @@ void GUI::render_backup_window() {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // 过滤选项
-    if (ImGui::CollapsingHeader("过滤选项")) {
+    // 文件选择
+    if (ImGui::CollapsingHeader("文件选择")) {
         ImGui::Indent(20);
         
-        // 文件类型过滤
+        // 文件类型选择
         ImGui::Text("包括文件类型:");
         ImGui::BeginGroup();
         ImGui::Checkbox("普通文件", &filter_regular_);
@@ -414,33 +414,14 @@ void GUI::render_backup_window() {
         ImGui::Separator();
         ImGui::Spacing();
         
-        // 路径过滤
-        ImGui::Checkbox("按路径过滤", &filter_by_path_);
+        // 文件名选择
+        ImGui::Checkbox("按文件名选择", &filter_by_name_);
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("启用路径过滤");
-        }
-        if (filter_by_path_) {
-            ImGui::Indent(20);
-            ImGui::Text("路径匹配:");
-            ImGui::InputText("##path_pattern", path_pattern_, PATTERN_BUFFER_SIZE);
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("使用正则表达式匹配路径\n例如: /home/user/.*\\.txt$ 匹配指定目录下的所有txt文件");
-            }
-            ImGui::Unindent(20);
-        }
-        
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-        
-        // 文件名过滤
-        ImGui::Checkbox("按文件名过滤", &filter_by_name_);
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("启用文件名过滤");
+            ImGui::SetTooltip("指定要包含的文件名模式");
         }
         if (filter_by_name_) {
             ImGui::Indent(20);
-            ImGui::Text("文件名匹配:");
+            ImGui::Text("文件名模式:");
             ImGui::InputText("##name_pattern", name_pattern_, PATTERN_BUFFER_SIZE);
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("使用正则表达式匹配文件名\n例如: \\.txt$ 匹配所有txt文件");
@@ -452,18 +433,37 @@ void GUI::render_backup_window() {
         ImGui::Separator();
         ImGui::Spacing();
         
-        // 文件大小过滤
-        ImGui::Checkbox("按文件大小过滤", &filter_by_size_);
+        // 路径选择
+        ImGui::Checkbox("按路径选择", &filter_by_path_);
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("启用文件大小过滤");
+            ImGui::SetTooltip("指定要包含的路径模式");
+        }
+        if (filter_by_path_) {
+            ImGui::Indent(20);
+            ImGui::Text("路径模式:");
+            ImGui::InputText("##path_pattern", path_pattern_, PATTERN_BUFFER_SIZE);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("使用正则表达式匹配路径\n例如: /home/user/.*\\.txt$ 匹配指定目录下的所有txt文件");
+            }
+            ImGui::Unindent(20);
+        }
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // 文件大小选择
+        ImGui::Checkbox("按文件大小选择", &filter_by_size_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("指定要包含的文件大小范围");
         }
         if (filter_by_size_) {
             ImGui::Indent(20);
-            ImGui::Text("大小限制:");
+            ImGui::Text("大小范围:");
             ImGui::SetNextItemWidth(50);
             ImGui::Combo("##size_op", &size_op_, "<\0>\0\0");
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("选择过滤条件：\n< - 小于指定大小\n> - 大于指定大小");
+                ImGui::SetTooltip("选择范围条件：\n< - 小于指定大小\n> - 大于指定大小");
             }
             
             ImGui::SameLine();

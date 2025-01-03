@@ -80,10 +80,10 @@ enable_testing()
 find_package(Catch2 3 REQUIRED)
 
 # 添加BDD测试可执行文件
-add_executable(packer_bdd_test tests/packer_bdd_test.cpp)
+add_executable(BDD_test tests/BDD_test.cpp)
 
 # 链接必要的库
-target_link_libraries(packer_bdd_test 
+target_link_libraries(BDD_test 
     PRIVATE 
     Catch2::Catch2WithMain
     packer
@@ -91,4 +91,4 @@ target_link_libraries(packer_bdd_test
 
 # 将测试添加到CTest
 include(Catch)
-catch_discover_tests(packer_bdd_test)
+catch_discover_tests(BDD_test)

@@ -114,9 +114,6 @@ void ParserConfig::check_conflicts(const cmdline::parser& parser) {
   rules.emplace_back(new DependencyRule("verify", {"input"}));
   rules.emplace_back(new DependencyRule("encrypt", {"password"}));
 
-  rules.emplace_back(new PathValidationRule("input", true, false));
-  rules.emplace_back(new PathValidationRule("output", false, false));
-
   // 检查所有规则
   for (const auto& rule : rules) {
     rule->check(parser);

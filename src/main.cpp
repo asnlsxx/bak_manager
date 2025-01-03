@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
     if (parser.exist("input")) 
       input_path = fs::absolute(parser.get<std::string>("input"));
     if (parser.exist("output")) 
-    output_path = fs::absolute(parser.get<std::string>("output"));
+      output_path = fs::absolute(parser.get<std::string>("output"));
     if (parser.exist("backup")) {
       // 设置过滤器
       packer.set_filter(ParserConfig::create_filter(parser));
@@ -99,8 +99,6 @@ int main(int argc, char *argv[]) {
       spdlog::info("恢复完成");
     } 
     else if (parser.exist("verify")) {
-      Packer packer;
-      fs::path input_path = fs::absolute(parser.get<std::string>("input"));
       if (!packer.Verify(input_path)) {
         spdlog::error("验证失败");
         return 1;

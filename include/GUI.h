@@ -49,6 +49,7 @@ private:
     static constexpr size_t PATH_BUFFER_SIZE = 256;
     static constexpr size_t PASSWORD_BUFFER_SIZE = 64;
     static constexpr size_t MAX_LOG_LINES = 1000;
+    static constexpr size_t PATTERN_BUFFER_SIZE = 128;
     
     Packer packer_;
     char input_path_[PATH_BUFFER_SIZE] = "";
@@ -72,6 +73,14 @@ private:
     std::string open_file_dialog(bool folder = false);
     bool restore_metadata_ = false;  // 是否恢复元数据
     void reset_input_fields();  // 添加重置函数声明
+    
+    char name_pattern_[PATTERN_BUFFER_SIZE] = "";
+    bool filter_regular_ = true;
+    bool filter_symlink_ = false;
+    bool filter_pipe_ = false;
+    int size_op_ = 0;  // 0: <, 1: >
+    float size_value_ = 0.0f;
+    int size_unit_ = 0;  // 0: B, 1: KB, 2: MB, 3: GB
 };
 
 #endif // GUI_H 

@@ -1,5 +1,6 @@
 #include "GUI.h"
 #include "imgui.h"
+#include "ArgParser.h"
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include <GLFW/glfw3.h>
@@ -350,18 +351,18 @@ std::string GUI::open_file_dialog(bool folder) {
 }
 
 void GUI::render_backup_window() {
-    ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
     ImGui::Begin("备份", &show_backup_window_, ImGuiWindowFlags_NoCollapse);
     
     ImGui::Text("选择要备份的文件或目录：");
     ImGui::Spacing();
     
-    // File Selection
+    // 文件选择
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
     ImGui::InputText("源路径", input_path_, PATH_BUFFER_SIZE);
     ImGui::SameLine();
     if (ImGui::Button("浏览...")) {
-        std::string selected = open_file_dialog(true);  // true for folder selection
+        std::string selected = open_file_dialog(true);
         if (!selected.empty()) {
             strncpy(input_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
             input_path_[PATH_BUFFER_SIZE - 1] = '\0';
@@ -371,7 +372,7 @@ void GUI::render_backup_window() {
     ImGui::InputText("目标路径", output_path_, PATH_BUFFER_SIZE);
     ImGui::SameLine();
     if (ImGui::Button("浏览...##2")) {
-        std::string selected = open_file_dialog(true);  // true for folder selection
+        std::string selected = open_file_dialog(true);
         if (!selected.empty()) {
             strncpy(output_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
             output_path_[PATH_BUFFER_SIZE - 1] = '\0';
@@ -382,12 +383,49 @@ void GUI::render_backup_window() {
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
+
+    // 过滤选项
+    if (ImGui::CollapsingHeader("过滤选项")) {
+        ImGui::Indent(20);
+        
+        // 文件类型过滤
+        ImGui::Text("文件类型:");
+        ImGui::Checkbox("普通文件", &filter_regular_);
+        ImGui::SameLine();
+        ImGui::Checkbox("符号链接", &filter_symlink_);
+        ImGui::SameLine();
+        ImGui::Checkbox("管道文件", &filter_pipe_);
+        
+        ImGui::Spacing();
+        
+        // 文件名过滤
+        ImGui::Text("文件名匹配:");
+        ImGui::InputText("##name_pattern", name_pattern_, PATTERN_BUFFER_SIZE);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("使用正则表达式匹配文件名，例如: \\.txt$");
+        }
+        
+        ImGui::Spacing();
+        
+        // 文件大小过滤
+        ImGui::Text("文件大小:");
+        ImGui::Combo("##size_op", &size_op_, "<\0>\0\0");
+        ImGui::SameLine();
+        ImGui::InputFloat("##size", &size_value_, 0.0f, 0.0f, "%.1f");
+        ImGui::SameLine();
+        ImGui::Combo("##size_unit", &size_unit_, "B\0KB\0MB\0GB\0\0");
+        
+        ImGui::Unindent(20);
+    }
     
-    // Options
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    // 压缩和加密选项
     ImGui::BeginGroup();
     ImGui::Checkbox("压缩文件", &compress_);
     ImGui::Checkbox("加密文件", &encrypt_);
-    
     if (encrypt_) {
         ImGui::Indent(20);
         ImGui::InputText("密码", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
@@ -429,6 +467,49 @@ void GUI::render_backup_window() {
                 return;
             }
 
+            // 创建过滤器
+            std::vector<std::string> args = {"program"};  // 第一个参数是程序名
+            
+            // 添加类型过滤
+            std::string type_str;
+            if (filter_regular_) type_str += 'n';
+            if (filter_symlink_) type_str += 'l';
+            if (filter_pipe_) type_str += 'p';
+            if (!type_str.empty()) {
+                args.push_back("--type");
+                args.push_back(type_str);
+            }
+            
+            // 添加名称过滤
+            if (!std::string(name_pattern_).empty()) {
+                args.push_back("--name");
+                args.push_back(name_pattern_);
+            }
+            
+            // 添加大小过滤
+            if (size_value_ > 0) {
+                std::string size_str = (size_op_ == 0 ? "<" : ">") + 
+                                     std::to_string(static_cast<int64_t>(size_value_ * 
+                                     std::pow(1024, size_unit_))) + "b";
+                args.push_back("--size");
+                args.push_back(size_str);
+            }
+
+            // 转换为 argc 和 argv
+            std::vector<char*> argv;
+            for (const auto& arg : args) {
+                argv.push_back(const_cast<char*>(arg.c_str()));
+            }
+            int argc = static_cast<int>(argv.size());
+
+            // 创建解析器并解析参数
+            cmdline::parser filter_parser;
+            ParserConfig::configure_parser(filter_parser);
+            filter_parser.parse(argc, argv.data());
+            
+            // 设置过滤器
+            packer_.set_filter(ParserConfig::create_filter(filter_parser));
+            
             packer_.set_compress(compress_);
             if (encrypt_) {
                 packer_.set_encrypt(true, password_);
@@ -700,8 +781,6 @@ void GUI::render_verify_window() {
             strncpy(input_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
             input_path_[PATH_BUFFER_SIZE - 1] = '\0';
             
-            // 自动检测是否为加密备份
-            encrypt_ = packer_.is_encrypted(input_path_);
         }
     }
     ImGui::PopStyleVar();

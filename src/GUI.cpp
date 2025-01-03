@@ -699,6 +699,9 @@ void GUI::render_verify_window() {
         if (!selected.empty()) {
             strncpy(input_path_, selected.c_str(), PATH_BUFFER_SIZE - 1);
             input_path_[PATH_BUFFER_SIZE - 1] = '\0';
+            
+            // 自动检测是否为加密备份
+            encrypt_ = packer_.is_encrypted(input_path_);
         }
     }
     ImGui::PopStyleVar();
@@ -707,14 +710,16 @@ void GUI::render_verify_window() {
     ImGui::Separator();
     ImGui::Spacing();
     
-    // 加密选项
-    ImGui::BeginGroup();
-
-    ImGui::EndGroup();
-    
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    // 如果是加密备份，显示密码输入框
+    if (encrypt_) {
+        ImGui::Text("这是一个加密的备份文件，请输入密码：");
+        ImGui::Indent(20);
+        ImGui::InputText("密码", password_, PASSWORD_BUFFER_SIZE, ImGuiInputTextFlags_Password);
+        ImGui::Unindent(20);
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+    }
     
     // 验证按钮
     float button_width = 120;
@@ -736,6 +741,17 @@ void GUI::render_verify_window() {
                 ImGui::End();
                 return;
             }
+
+            if (encrypt_ && password_[0] == '\0') {
+                show_error_ = true;
+                error_message_ = "需要密码验证加密备份";
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar();
+                ImGui::End();
+                return;
+            }
+            
+            packer_.set_encrypt(encrypt_, password_);
             
             if (packer_.Verify(input_path_)) {
                 show_success_ = true;

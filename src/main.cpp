@@ -36,8 +36,7 @@ int main(int argc, char *argv[]) {
   cmdline::parser parser;
   ParserConfig::configure_parser(parser);
   
-  // 添加 GUI 选项
-  parser.add("gui", 'g', "启动图形界面");
+  
   
   parser.parse_check(argc, argv);
 
@@ -56,25 +55,14 @@ int main(int argc, char *argv[]) {
       std::cout << parser.usage();
       return 0;
     }
-    if (parser.exist("verify") ) {
-      Packer packer;
-      fs::path input_path = fs::absolute(parser.get<std::string>("input"));
-      if (!packer.Verify(input_path)) {
-        spdlog::error("验证失败");
-        return 1;
-      }
-      return 0;
-    }
-    if (!(parser.exist("backup") || parser.exist("restore"))) {
-      std::cout << "请选择还原或备份选项" << std::endl;
-      return 0;
-    }
     ParserConfig::check_conflicts(parser);
 
     Packer packer;
-    fs::path input_path = fs::absolute(parser.get<std::string>("input"));
-    fs::path output_path = fs::absolute(parser.get<std::string>("output"));
-
+    fs::path input_path,output_path; 
+    if (parser.exist("input")) 
+      input_path = fs::absolute(parser.get<std::string>("input"));
+    if (parser.exist("output")) 
+    output_path = fs::absolute(parser.get<std::string>("output"));
     if (parser.exist("backup")) {
       // 设置过滤器
       packer.set_filter(ParserConfig::create_filter(parser));
@@ -110,6 +98,15 @@ int main(int argc, char *argv[]) {
       }
       spdlog::info("恢复完成");
     } 
+    else if (parser.exist("verify")) {
+      Packer packer;
+      fs::path input_path = fs::absolute(parser.get<std::string>("input"));
+      if (!packer.Verify(input_path)) {
+        spdlog::error("验证失败");
+        return 1;
+      }
+      spdlog::info("验证完成");
+    }
   } catch (const std::exception &e) {
     spdlog::critical("发生错误: {}", e.what());
     return 1;

@@ -57,52 +57,6 @@ class DependencyRule : public ArgumentRule {
   }
 };
 
-// 路径检查规则
-class PathValidationRule : public ArgumentRule {
-  std::string option_;
-  bool should_exist_;
-  bool should_be_file_;
-
- public:
-  PathValidationRule(const std::string& option, bool should_exist,
-                     bool should_be_file)
-      : option_(option),
-        should_exist_(should_exist),
-        should_be_file_(should_be_file) {}
-
-  void check(const cmdline::parser& parser) const override {
-    if (parser.exist(option_)) {
-      fs::path path = fs::absolute(parser.get<std::string>(option_));
-      if (should_exist_ && !fs::exists(path)) {
-        throw std::runtime_error("Path does not exist: " + path.string());
-      }
-      if (should_be_file_ && fs::exists(path) && !fs::is_regular_file(path)) {
-        throw std::runtime_error("Not a regular file: " + path.string());
-      }
-    }
-  }
-};
-
-// 格式验证规则
-class FormatValidationRule : public ArgumentRule {
-  std::string option_;
-  std::regex pattern_;
-  std::string error_message_;
-
- public:
-  FormatValidationRule(const std::string& option, const std::string& pattern,
-                       const std::string& error_message)
-      : option_(option), pattern_(pattern), error_message_(error_message) {}
-
-  void check(const cmdline::parser& parser) const override {
-    if (parser.exist(option_)) {
-      if (!std::regex_match(parser.get<std::string>(option_), pattern_)) {
-        throw std::runtime_error(error_message_);
-      }
-    }
-  }
-};
-
 void ParserConfig::configure_parser(cmdline::parser& parser) {
   // 基本选项
   parser.add<std::string>("input", 'i', "程序输入文件路径", false);
@@ -144,6 +98,8 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
       "size", '\0',
       "按文件大小过滤，格式: [<>]N[bkmg]，例如: >1k表示大于1KB, <1m表示小于1MB",
       false);
+  // 添加 GUI 选项
+  parser.add("gui", 'g', "启动图形界面");
 }
 
 void ParserConfig::check_conflicts(const cmdline::parser& parser) {
@@ -160,21 +116,6 @@ void ParserConfig::check_conflicts(const cmdline::parser& parser) {
 
   rules.emplace_back(new PathValidationRule("input", true, false));
   rules.emplace_back(new PathValidationRule("output", false, false));
-
-  // 时间格式验证
-  const std::string time_pattern = "\\d{12},\\d{12}";
-  const std::string time_error =
-      "Invalid time format. Expected: YYYYMMDDHHMM,YYYYMMDDHHMM";
-  rules.emplace_back(
-      new FormatValidationRule("atime", time_pattern, time_error));
-  rules.emplace_back(
-      new FormatValidationRule("mtime", time_pattern, time_error));
-  rules.emplace_back(
-      new FormatValidationRule("ctime", time_pattern, time_error));
-
-  // 大小格式验证
-  rules.emplace_back(new FormatValidationRule(
-      "size", "[<>]\\d+[bkmg]", "Invalid size format. Expected: [<>]N[bkmg]"));
 
   // 检查所有规则
   for (const auto& rule : rules) {

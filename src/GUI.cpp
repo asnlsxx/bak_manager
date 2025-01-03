@@ -283,9 +283,6 @@ void GUI::render_main_window() {
         if (ImGui::Button("清除")) {
             log_buffer_.clear();
         }
-        ImGui::SameLine();
-        static bool auto_scroll = true;
-        ImGui::Checkbox("自动滚动", &auto_scroll);
         
         // 日志内容区域
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
@@ -312,6 +309,10 @@ void GUI::render_main_window() {
                     ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "%s", remaining);
             }
         }
+        
+        // 始终自动滚动到底部
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f);
         
         ImGui::EndChild();
         ImGui::PopStyleColor();
@@ -389,31 +390,94 @@ void GUI::render_backup_window() {
         ImGui::Indent(20);
         
         // 文件类型过滤
-        ImGui::Text("文件类型:");
+        ImGui::Text("包括文件类型:");
+        ImGui::BeginGroup();
         ImGui::Checkbox("普通文件", &filter_regular_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("包括普通文件（如文档、图片等）");
+        }
+        
         ImGui::SameLine();
         ImGui::Checkbox("符号链接", &filter_symlink_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("包括符号链接（软链接）");
+        }
+        
         ImGui::SameLine();
         ImGui::Checkbox("管道文件", &filter_pipe_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("包括命名管道文件");
+        }
+        ImGui::EndGroup();
         
         ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
         
-        // 文件名过滤
-        ImGui::Text("文件名匹配:");
-        ImGui::InputText("##name_pattern", name_pattern_, PATTERN_BUFFER_SIZE);
+        // 路径过滤
+        ImGui::Checkbox("按路径过滤", &filter_by_path_);
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("使用正则表达式匹配文件名，例如: \\.txt$");
+            ImGui::SetTooltip("启用路径过滤");
+        }
+        if (filter_by_path_) {
+            ImGui::Indent(20);
+            ImGui::Text("路径匹配:");
+            ImGui::InputText("##path_pattern", path_pattern_, PATTERN_BUFFER_SIZE);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("使用正则表达式匹配路径\n例如: /home/user/.*\\.txt$ 匹配指定目录下的所有txt文件");
+            }
+            ImGui::Unindent(20);
         }
         
         ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // 文件名过滤
+        ImGui::Checkbox("按文件名过滤", &filter_by_name_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("启用文件名过滤");
+        }
+        if (filter_by_name_) {
+            ImGui::Indent(20);
+            ImGui::Text("文件名匹配:");
+            ImGui::InputText("##name_pattern", name_pattern_, PATTERN_BUFFER_SIZE);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("使用正则表达式匹配文件名\n例如: \\.txt$ 匹配所有txt文件");
+            }
+            ImGui::Unindent(20);
+        }
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
         
         // 文件大小过滤
-        ImGui::Text("文件大小:");
-        ImGui::Combo("##size_op", &size_op_, "<\0>\0\0");
-        ImGui::SameLine();
-        ImGui::InputFloat("##size", &size_value_, 0.0f, 0.0f, "%.1f");
-        ImGui::SameLine();
-        ImGui::Combo("##size_unit", &size_unit_, "B\0KB\0MB\0GB\0\0");
+        ImGui::Checkbox("按文件大小过滤", &filter_by_size_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("启用文件大小过滤");
+        }
+        if (filter_by_size_) {
+            ImGui::Indent(20);
+            ImGui::Text("大小限制:");
+            ImGui::SetNextItemWidth(50);
+            ImGui::Combo("##size_op", &size_op_, "<\0>\0\0");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("选择过滤条件：\n< - 小于指定大小\n> - 大于指定大小");
+            }
+            
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(100);
+            ImGui::InputFloat("##size", &size_value_, 0.0f, 0.0f, "%.1f");
+            
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80);
+            ImGui::Combo("##size_unit", &size_unit_, "B\0KB\0MB\0GB\0\0");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("选择大小单位：\nB - 字节\nKB - 千字节\nMB - 兆字节\nGB - 吉字节");
+            }
+            ImGui::Unindent(20);
+        }
         
         ImGui::Unindent(20);
     }
@@ -468,7 +532,7 @@ void GUI::render_backup_window() {
             }
 
             // 创建过滤器
-            std::vector<std::string> args = {"program"};  // 第一个参数是程序名
+            std::vector<std::string> args = {"program"};
             
             // 添加类型过滤
             std::string type_str;
@@ -481,18 +545,24 @@ void GUI::render_backup_window() {
             }
             
             // 添加名称过滤
-            if (!std::string(name_pattern_).empty()) {
+            if (filter_by_name_ && !std::string(name_pattern_).empty()) {
                 args.push_back("--name");
                 args.push_back(name_pattern_);
             }
             
             // 添加大小过滤
-            if (size_value_ > 0) {
+            if (filter_by_size_ && size_value_ > 0) {
                 std::string size_str = (size_op_ == 0 ? "<" : ">") + 
                                      std::to_string(static_cast<int64_t>(size_value_ * 
                                      std::pow(1024, size_unit_))) + "b";
                 args.push_back("--size");
                 args.push_back(size_str);
+            }
+
+            // 添加路径过滤
+            if (filter_by_path_ && !std::string(path_pattern_).empty()) {
+                args.push_back("--path");
+                args.push_back(path_pattern_);
             }
 
             // 转换为 argc 和 argv
@@ -656,16 +726,10 @@ void GUI::render_log_window() {
     if (ImGui::Button("清除")) {
         log_buffer_.clear();
     }
-    ImGui::SameLine();
-    
-    // 添加自动滚动选项
-    static bool auto_scroll = true;
-    ImGui::Checkbox("自动滚动", &auto_scroll);
     
     ImGui::Separator();
     
     // 创建日志区域
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
     ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false, 
                       ImGuiWindowFlags_HorizontalScrollbar);
     
@@ -685,12 +749,12 @@ void GUI::render_log_window() {
         ImGui::PopStyleColor();
     }
     
-    // 自动滚动到底部
-    if (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+    // 始终自动滚动到底部
+    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
         ImGui::SetScrollHereY(1.0f);
     
     ImGui::EndChild();
-    ImGui::PopStyleColor();
+    
     ImGui::End();
     
     // 限制日志行数
@@ -834,7 +898,17 @@ void GUI::reset_input_fields() {
     input_path_[0] = '\0';
     output_path_[0] = '\0';
     password_[0] = '\0';
+    name_pattern_[0] = '\0';  // 重置路径过滤
     compress_ = false;
     encrypt_ = false;
     restore_metadata_ = false;
+    filter_by_name_ = false;
+    filter_by_size_ = false;
+    filter_by_path_ = false;  // 重置路径过滤开关
+    filter_regular_ = true;
+    filter_symlink_ = false;
+    filter_pipe_ = false;
+    size_op_ = 0;
+    size_value_ = 0.0f;
+    size_unit_ = 0;
 } 

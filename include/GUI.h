@@ -81,6 +81,10 @@ private:
     int size_op_ = 0;  // 0: <, 1: >
     float size_value_ = 0.0f;
     int size_unit_ = 0;  // 0: B, 1: KB, 2: MB, 3: GB
+    bool filter_by_name_ = false;  // 是否启用文件名过滤
+    bool filter_by_size_ = false;  // 是否启用大小过滤
+    char path_pattern_[PATTERN_BUFFER_SIZE] = "";
+    bool filter_by_path_ = false;  // 是否启用路径过滤
 };
 
 #endif // GUI_H 

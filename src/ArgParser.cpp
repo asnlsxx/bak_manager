@@ -201,6 +201,11 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
         return false;
       }
     }
+    
+    // 如果是文件夹就不再进行过滤
+    if (fs::is_directory(path)) {
+      return true;
+    }
 
     // 文件名过滤
     if (parser.exist("name")) {
@@ -209,10 +214,7 @@ FileFilter ParserConfig::create_filter(const cmdline::parser& parser) {
         return false;
       }
     }
-    // 如果是文件夹就不再进行过滤
-    if (fs::is_directory(path)) {
-      return true;
-    }
+    
     // 文件类型过滤
     if (parser.exist("type")) {
       const std::string& types = parser.get<std::string>("type");

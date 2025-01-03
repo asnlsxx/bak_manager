@@ -35,9 +35,6 @@ void initialize_logger(bool verbose) {
 int main(int argc, char *argv[]) {
   cmdline::parser parser;
   ParserConfig::configure_parser(parser);
-  
-  
-  
   parser.parse_check(argc, argv);
 
   try {
@@ -71,10 +68,7 @@ int main(int argc, char *argv[]) {
       packer.set_compress(parser.exist("compress"));
       
       // 设置是否加密
-      if (parser.exist("encrypt")) {
-          packer.set_encrypt(true, parser.get<std::string>("password"));
-      }
-      
+      packer.set_encrypt(parser.exist("encrypt"), parser.get<std::string>("password"));
       // 构造备份文件路径
       fs::path backup_path = output_path / (input_path.filename().string() + ".backup");
       
@@ -88,10 +82,7 @@ int main(int argc, char *argv[]) {
       packer.set_restore_metadata(parser.exist("metadata"));
       
       // 如果提供了密码，设置解密
-      if (parser.exist("password")) {
-          packer.set_encrypt(true, parser.get<std::string>("password"));
-      }
-      
+      packer.set_encrypt(parser.exist("password"), parser.get<std::string>("password"));
       if (!packer.Unpack(input_path, output_path)) {
         spdlog::error("恢复失败");
         return 1;
@@ -104,6 +95,10 @@ int main(int argc, char *argv[]) {
         return 1;
       }
       spdlog::info("验证完成");
+    }
+    else {
+      spdlog::error("请选择操作：备份、恢复、验证");
+      return 1;
     }
   } catch (const std::exception &e) {
     spdlog::critical("发生错误: {}", e.what());

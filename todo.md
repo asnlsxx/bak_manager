@@ -42,4 +42,4 @@ this->WriteHeader(backup_file);
 
 对规则引擎的测试
 
-测试除了type -n以外的文件类型过滤
+添加 Code Coverage 测试

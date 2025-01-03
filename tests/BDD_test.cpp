@@ -575,6 +575,7 @@ SCENARIO_METHOD(TestFixture, "备份时的文件路径过滤功能",
             fs::path project_dir = restore_dir / test_dir.filename();
             // 验证只有dir1目录下的文件被备份
             REQUIRE_FALSE(fs::exists(project_dir / "file1.txt"));
+            REQUIRE_FALSE(fs::exists(project_dir / "file2.dat"));
             REQUIRE(fs::exists(project_dir / "dir1/file3.txt"));
             REQUIRE(fs::exists(project_dir / "dir1/pipe1"));
             REQUIRE_FALSE(fs::exists(project_dir / "dir2/file4.log"));
@@ -1019,6 +1020,118 @@ SCENARIO_METHOD(TestFixture, "测试验证功能在不同模式下的表现",
                 corrupt_verify_packer.set_encrypt(true, "test_password");
                 REQUIRE(corrupt_verify_packer.Verify(backup_path) == false);
             }
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "测试中文文件名和路径",
+                "[backup][unicode]") {
+    GIVEN("一个包含中文名称的目录结构") {
+        std::vector<TestFile> files = {
+            {"测试文件.txt", TestFileType::Regular, "测试内容"},
+            {"文档/", TestFileType::Directory},
+            {"文档/报告.doc", TestFileType::Regular, "报告内容"},
+            {"文档/数据.dat", TestFileType::Regular, "数据内容"},
+            {"链接文件", TestFileType::Symlink, "", "测试文件.txt"},
+            {"文档/管道", TestFileType::FIFO},
+            {"文档/子目录/", TestFileType::Directory},
+            {"文档/子目录/配置.conf", TestFileType::Regular, "配置内容"}
+        };
+        create_test_structure(files);
+
+        WHEN("执行备份和还原") {
+            Packer packer;
+            fs::path backup_path = backup_dir / (test_dir.filename().string() + ".backup");
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            fs::path restore_dir = fs::absolute("restored_data");
+            REQUIRE(packer.Unpack(backup_path, restore_dir) == true);
+
+            fs::path project_dir = restore_dir / test_dir.filename();
+            
+            // 验证文件存在性和内容
+            REQUIRE(fs::exists(project_dir / "测试文件.txt"));
+            REQUIRE(fs::exists(project_dir / "文档/报告.doc"));
+            REQUIRE(fs::exists(project_dir / "文档/数据.dat"));
+            REQUIRE(fs::is_symlink(project_dir / "链接文件"));
+            REQUIRE(fs::exists(project_dir / "文档/管道"));
+            REQUIRE(fs::exists(project_dir / "文档/子目录/配置.conf"));
+
+            // 验证文件内容
+            std::ifstream test_file(project_dir / "测试文件.txt");
+            std::string content;
+            std::getline(test_file, content);
+            REQUIRE(content == "测试内容");
+
+            // 验证符号链接
+            REQUIRE(fs::read_symlink(project_dir / "链接文件") == "测试文件.txt");
+
+            fs::remove_all(restore_dir);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "测试输入路径不存在的错误处理",
+                "[backup][error]") {
+    GIVEN("不存在的输入路径") {
+        // 创建基本测试文件
+        std::vector<TestFile> files = {
+            {"test.txt", TestFileType::Regular, "测试内容"},
+            {"dir1", TestFileType::Directory},
+            {"dir1/file.txt", TestFileType::Regular, "文件内容"}
+        };
+        create_test_structure(files);
+
+        WHEN("输入路径不存在") {
+            Packer packer;
+            fs::path nonexistent_path = test_dir / "nonexistent";
+            fs::path backup_path = backup_dir / "backup.backup";
+            
+            REQUIRE(packer.Pack(nonexistent_path, backup_path) == false);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "测试错误密码解密的错误处理",
+                "[backup][error]") {
+    GIVEN("加密的备份文件") {
+        // 创建基本测试文件
+        std::vector<TestFile> files = {
+            {"test.txt", TestFileType::Regular, "测试内容"},
+            {"dir1", TestFileType::Directory},
+            {"dir1/file.txt", TestFileType::Regular, "文件内容"}
+        };
+        create_test_structure(files);
+
+        WHEN("使用错误的密码解密") {
+            // 创建加密备份
+            Packer packer;
+            packer.set_encrypt(true, "correct_password");
+            fs::path backup_path = backup_dir / "encrypted.backup";
+            REQUIRE(packer.Pack(test_dir, backup_path) == true);
+
+            // 使用错误密码尝试解密
+            Packer wrong_packer;
+            wrong_packer.set_encrypt(true, "wrong_password");
+            fs::path restore_path = fs::absolute("restored_wrong");
+            REQUIRE(wrong_packer.Unpack(backup_path, restore_path) == false);
+        }
+    }
+}
+
+SCENARIO_METHOD(TestFixture, "测试空备份文件的错误处理",
+                "[backup][error]") {
+    GIVEN("一个空的备份文件") {
+        // 创建空文件
+        fs::path empty_backup = backup_dir / "empty.backup";
+        std::ofstream empty_file(empty_backup);
+        empty_file.close();
+
+        WHEN("尝试还原空备份文件") {
+            Packer packer;
+            fs::path restore_path = fs::absolute("restored_empty");
+            REQUIRE(packer.Unpack(empty_backup, restore_path) == false);
+            fs::remove_all(restore_path);
         }
     }
 }

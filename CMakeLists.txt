@@ -40,7 +40,7 @@ add_library(core STATIC
     src/FileHandler.cpp
     src/ArgParser.cpp
     src/Compression.cpp
-    src/aes.cpp
+    src/AES.cpp
 )
 
 # 链接核心库的依赖

@@ -9,7 +9,7 @@
 #include <cstdint>
 #include "FileHandler.h"
 #include "spdlog/spdlog.h"
-#include "aes.h"
+#include "AES.h"
 
 namespace fs = std::filesystem;
 

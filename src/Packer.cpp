@@ -162,8 +162,8 @@ bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
 
         if (stored_header.mod & MOD_COMPRESSED) {
             spdlog::info("解压数据");
-            // 再解压
-            final_data = LZWCompression::decompress(final_data.data(), final_data.size());
+            // 不再需要传入size参数
+            final_data = LZWCompression::decompress(final_data.data());
         }
 
         // 创建临时文件

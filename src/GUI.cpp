@@ -906,8 +906,8 @@ void GUI::reset_input_fields() {
     filter_by_size_ = false;
     filter_by_path_ = false;  // 重置路径过滤开关
     filter_regular_ = true;
-    filter_symlink_ = false;
-    filter_pipe_ = false;
+    filter_symlink_ = true;
+    filter_pipe_ = true;
     size_op_ = 0;
     size_value_ = 0.0f;
     size_unit_ = 0;

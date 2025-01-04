@@ -1,10 +1,6 @@
 FROM ubuntu:22.04
 
-# ENV MYPATH /root/backupmanager
 
-# RUN mkdir $MYPATH
-# COPY . $MYPATH
-# WORKDIR $MYPATH
 
 # 设置时区
 ENV TZ="Asia/Shanghai"
@@ -26,6 +22,11 @@ RUN git clone https://github.com/catchorg/Catch2.git --depth=1 && \
 # 更新动态库配置
 RUN ldconfig
 
+ENV MYPATH /root/backupmanager
+RUN mkdir $MYPATH
+COPY . $MYPATH
+WORKDIR $MYPATH
+
 # 编译安装
-# RUN rm -rf build && mkdir build
-# RUN cd build && cmake .. && make && make install
+RUN rm -rf build && mkdir build
+RUN cd build && cmake .. && make && make install

@@ -5,6 +5,10 @@
 namespace LZWCompression {
 
 std::vector<char> compress(const std::string_view& data) {
+    // 如果为空
+    if (data.empty()) {
+        return {};
+    }
     std::unordered_map<std::string, int> dictionary;
     std::vector<int> compressed;
     
@@ -53,6 +57,10 @@ std::vector<char> compress(const std::string_view& data) {
 }
 
 std::vector<char> decompress(const char* data) {
+    // 如果为空
+    if (!data) {
+        return {};
+    }
     // 读取压缩数据大小
     size_t comp_size;
     std::memcpy(&comp_size, data, sizeof(size_t));

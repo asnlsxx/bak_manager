@@ -28,6 +28,10 @@ uint32_t Packer::calculateCRC32(const char* data, size_t length, uint32_t crc) c
 
 bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
     try {
+        // 如果 source_path 不存在
+        if (!fs::exists(source_path)) {
+            throw std::runtime_error("源路径不存在: " + source_path.string());
+        }
         spdlog::info("开始打包: {} -> {}", source_path.string(), target_path.string());
         // 创建临时文件用于打包
         fs::path temp_path = target_path.parent_path() / (target_path.stem().string() + ".tmp");
@@ -135,6 +139,11 @@ bool Packer::PackToFile(const fs::path& source_path, const fs::path& target_path
 
 bool Packer::Unpack(const fs::path& backup_path, const fs::path& restore_path) {
     try {
+        // 如果 backup_path 不存在
+        if (!fs::exists(backup_path)) {
+            throw std::runtime_error("备份文件不存在: " + backup_path.string());
+        }
+        
         spdlog::info("开始解包: {} -> {}", backup_path.string(), restore_path.string());
 
         // 读取备份文件

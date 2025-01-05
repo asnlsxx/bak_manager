@@ -235,11 +235,6 @@ std::string FileHandler::ReadLongPath(std::ifstream &backup_file) const {
 
 void FileHandler::RestoreMetadata(const fs::path& path, const struct stat& metadata) const {
     const char* path_str = path.c_str();
-    struct stat restored_metadata;
-    if (stat(path_str, &restored_metadata) != 0) {
-        spdlog::warn("无法获取恢复后的元数据: {} ({})", path.string(), strerror(errno));
-    }
-
 
     // 还原文件权限信息
     if (chmod(path_str, metadata.st_mode & 07777) != 0) {  // 只还原权限位

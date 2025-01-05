@@ -86,7 +86,7 @@ void ParserConfig::configure_parser(cmdline::parser& parser) {
       "ctime", '\0',
       "按状态改变时间过滤，格式: START,END 例如: 202401010000,202401012359",
       false);
-  parser.add<std::string>("message", 'm', "添加备注信息", false);
+  // parser.add<std::string>("message", 'm', "添加备注信息", false);
   // 恢复选项
   parser.add("metadata", 'a', "恢复文件的元数据");
 

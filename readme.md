@@ -143,6 +143,12 @@ BackupManager [操作] [选项] <参数>
 - `tests/`: 测试文件
 - `third_party/`: 第三方库
 
+修改代码后，需要重新编译安装
+```bash
+rm -rf build && mkdir build
+cd build && cmake .. && make && make install
+```
+
 ## 📝 使用示例
 
 ### 基础备份还原

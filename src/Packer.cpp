@@ -28,6 +28,7 @@ uint32_t Packer::calculateCRC32(const char* data, size_t length, uint32_t crc) c
 
 bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
     try {
+        spdlog::info("开始打包: {} -> {}", source_path.string(), target_path.string());
         // 创建临时文件用于打包
         fs::path temp_path = target_path.parent_path() / (target_path.stem().string() + ".tmp");
         
@@ -91,9 +92,11 @@ bool Packer::Pack(const fs::path& source_path, const fs::path& target_path) {
 }
 
 bool Packer::PackToFile(const fs::path& source_path, const fs::path& target_path) {
+    inode_table.clear();
+
     const fs::path normalized_source = source_path.lexically_normal();
     const fs::path normalized_target = target_path.lexically_normal();
-    spdlog::info("开始打包: {} -> {}", normalized_source.string(), normalized_target.string());
+    
     try {
         std::ofstream backup_file(normalized_target, std::ios::binary);
         if (!backup_file) {
@@ -262,7 +265,7 @@ bool Packer::Verify(const fs::path& backup_path) {
 
         spdlog::info("备份文件验证成功");
         spdlog::info("备份时间: {}", std::ctime(&stored_header.timestamp));
-        spdlog::info("备份描述: {}", stored_header.comment);
+        // spdlog::info("备份描述: {}", stored_header.comment);
         if (stored_header.mod & MOD_COMPRESSED) {
             spdlog::info("文件已压缩");
         }

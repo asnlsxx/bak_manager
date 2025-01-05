@@ -1,22 +1,29 @@
+// 实现文件处理器的核心功能
+// 包括普通文件、目录、符号链接和管道文件的打包和解包操作
+// 支持文件元数据的保存和恢复
+
 #include "FileHandler.h"
 #include <cstring>
 #include <filesystem>
 #include <stdexcept>
 #include <vector>
 #include <spdlog/spdlog.h>
+
+// 根据文件路径构造处理器
+// 获取文件元数据并初始化文件头
 FileHandler::FileHandler(const fs::path &filepath) : std::fstream() {
-  // 获取文件元数据
   struct stat file_stat;
   if (lstat(filepath.c_str(), &file_stat) != 0) {
     throw std::runtime_error("无法获取文件信息: " + filepath.string());
   }
-  // 使用相对路径
+  // 使用相对路径存储,便于还原时的路径处理
   std::snprintf(fileheader.path, MAX_PATH_LEN, "%s", filepath.c_str());
   fileheader.metadata = file_stat;
 }
 
+// 根据文件类型创建对应的处理器
+// 使用 symlink_status 以正确处理符号链接
 std::unique_ptr<FileHandler> FileHandler::Create(const fs::path &path) {
-  // 使用 symlink_status 而不是 status 来获取链接本身的类型
   fs::file_type type = fs::symlink_status(path).type();
   switch (type) {
   case fs::file_type::symlink:
@@ -32,6 +39,8 @@ std::unique_ptr<FileHandler> FileHandler::Create(const fs::path &path) {
   }
 }
 
+// 根据文件头信息创建对应的处理器
+// 用于从备份文件还原时创建正确的处理器类型
 std::unique_ptr<FileHandler> FileHandler::Create(const FileHeader &header) {
   auto mode = header.metadata.st_mode;
   switch (mode & S_IFMT) {
@@ -48,17 +57,21 @@ std::unique_ptr<FileHandler> FileHandler::Create(const FileHeader &header) {
   }
 }
 
+// 检查文件是否为硬链接
 bool FileHandler::IsHardLink() const {
   return fileheader.metadata.st_nlink > 1;
 }
 
+// 打开文件进行读写操作
 bool FileHandler::OpenFile(std::ios_base::openmode mode_) {
   this->open(this->fileheader.path, mode_);
   return is_open();
 }
 
+// 获取文件头信息
 const FileHeader &FileHandler::getFileHeader() const { return fileheader; }
 
+// 将文件头信息写入备份文件
 void FileHandler::WriteHeader(std::ofstream &backup_file) const {
   if (!backup_file) {
     throw std::runtime_error("备份文件未打开或无效");
@@ -72,6 +85,8 @@ void FileHandler::WriteHeader(std::ofstream &backup_file) const {
   }
 }
 
+// 打包普通文件
+// 处理硬链接的特殊情况：对于同一个inode只保存一份数据
 void RegularFileHandler::Pack(
     std::ofstream &backup_file,
     std::unordered_map<ino_t, std::string> &inode_table) {
@@ -79,26 +94,23 @@ void RegularFileHandler::Pack(
   FileHeader header = this->getFileHeader();
 
   if (this->IsHardLink()) {
-    // 如果当前备份文件中已经存在该inode，则直接写入硬链接目标路径
+    // 如果是已存在的硬链接，只写入链接信息
     if (inode_table.count(header.metadata.st_ino)) {
       backup_file.write(reinterpret_cast<const char *>(&header),
                         sizeof(header));
-
-      // 使用新的长路径写入方法
       WriteLongPath(backup_file, inode_table[header.metadata.st_ino]);
       return;
-    } else { // 否则记录inode和路径
-      // TODO: 对应的inode可能不在备份文件夹中
-      header.metadata.st_nlink = 1; // 方便还原时识别第一个相同的文件
+    } else {
+      // 第一次遇到该inode，记录路径
+      header.metadata.st_nlink = 1;
       inode_table[header.metadata.st_ino] = std::string(header.path);
     }
   }
 
-  // 写入文件头
+  // 写入文件头和内容
   backup_file.write(reinterpret_cast<const char *>(&header),
                     sizeof(header));
 
-  // 写入文件内容
   if (!this->OpenFile()) {
     throw std::runtime_error("无法打开文件: " + std::string(header.path));
   }
@@ -106,50 +118,50 @@ void RegularFileHandler::Pack(
   this->close();
 }
 
+// 打包目录
+// 只需保存目录的元数据信息
 void DirectoryHandler::Pack(
     std::ofstream &backup_file,
     std::unordered_map<ino_t, std::string> &inode_table) {
   this->WriteHeader(backup_file);
-  // 可以在这里添加目录特定的元数据
 }
 
+// 打包符号链接
+// 保存链接本身的元数据和目标路径
 void SymlinkHandler::Pack(std::ofstream &backup_file,
                           std::unordered_map<ino_t, std::string> &inode_table) {
   this->WriteHeader(backup_file);
-
-  // 获取链接目标路径
   FileHeader header = this->getFileHeader();
   std::string target_path = fs::read_symlink(header.path).string();
-  
-  // 使用新的长路径写入方法
   WriteLongPath(backup_file, target_path);
 }
 
+// 解包普通文件
+// 处理硬链接和普通文件的还原
 void RegularFileHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
   FileHeader header = this->getFileHeader();
   if (header.metadata.st_nlink > 1) {
-    // 使用新的长路径读取方法
+    // 处理硬链接
     std::string target_path = ReadLongPath(backup_file);
-
     fs::path link_path = fs::current_path() / header.path;
     fs::path target = fs::current_path() / target_path;
     
     fs::create_directories(link_path.parent_path());
-
     if(fs::exists(link_path)) {
       fs::remove(link_path);
     }
     fs::create_hard_link(target, link_path);
+    
     if (restore_metadata) {
       RestoreMetadata(link_path, header.metadata);
     }
     return;
   }
-  // 创建常规文件，使用当前目录作为基准
+
+  // 处理普通文件
   fs::path output_path = fs::current_path() / header.path;
   fs::create_directories(output_path.parent_path());
   
-  // 如果文件已存在则删除
   if(fs::exists(output_path)) {
     fs::remove(output_path);
   }
@@ -159,6 +171,7 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file, bool restore_metadat
     throw std::runtime_error("无法创建文件: " + output_path.string());
   }
 
+  // 按块读写文件内容
   char buffer[4096];
   std::streamsize remaining = header.metadata.st_size;
   while (remaining > 0) {
@@ -172,28 +185,28 @@ void RegularFileHandler::Unpack(std::ifstream &backup_file, bool restore_metadat
   if (backup_file.fail() || output_file.fail()) {
     throw std::runtime_error("文件复制失败: " + std::string(header.path));
   }
-  // 如果需要恢复元数据
+
   if (restore_metadata) {
     RestoreMetadata(output_path, header.metadata);
   }
-  // 关闭新建的文件
 }
 
+// 解包目录
+// 创建目录并恢复其元数据
 void DirectoryHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
   FileHeader header = this->getFileHeader();
   fs::path dir_path = fs::current_path() / header.path;
   fs::create_directories(dir_path);
   
-  // 如果需要恢复元数据
   if (restore_metadata) {
     RestoreMetadata(dir_path, header.metadata);
   }
 }
 
+// 解包符号链接
+// 创建新的符号链接并恢复其元数据
 void SymlinkHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
   FileHeader header = this->getFileHeader();
-  
-  // 使用新的长路径读取方法
   std::string target_path = ReadLongPath(backup_file);
   
   fs::path link_path = fs::current_path() / header.path;
@@ -205,13 +218,12 @@ void SymlinkHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
 
   fs::create_symlink(target_path, link_path);
   
-  // 如果需要恢复元数据
   if (restore_metadata) {
     RestoreMetadata(link_path, header.metadata);
   }
 }
 
-// 添加辅助函数实现
+// 写入长路径到备份文件
 void FileHandler::WriteLongPath(std::ofstream &backup_file, const std::string &path) const {
     // 先写入路径总长度
     uint32_t path_length = path.length();
@@ -221,6 +233,7 @@ void FileHandler::WriteLongPath(std::ofstream &backup_file, const std::string &p
     backup_file.write(path.c_str(), path_length);
 }
 
+// 从备份文件读取长路径
 std::string FileHandler::ReadLongPath(std::ifstream &backup_file) const {
     // 读取路径长度
     uint32_t path_length;
@@ -233,8 +246,9 @@ std::string FileHandler::ReadLongPath(std::ifstream &backup_file) const {
     return std::string(buffer.data(), path_length);
 }
 
+// 恢复文件的元数据
 void FileHandler::RestoreMetadata(const fs::path& path, const struct stat& metadata) const {
-    const char* path_str = path.c_str();
+  const char* path_str = path.c_str();
 
     // 还原文件权限信息
     if (chmod(path_str, metadata.st_mode & 07777) != 0) {  // 只还原权限位
@@ -253,12 +267,14 @@ void FileHandler::RestoreMetadata(const fs::path& path, const struct stat& metad
     }
 }
 
+// 打包管道文件
 void FIFOHandler::Pack(std::ofstream &backup_file,
                       std::unordered_map<ino_t, std::string> &inode_table) {
     // 管道文件只需要保存文件头信息
     this->WriteHeader(backup_file);
 }
 
+// 解包管道文件
 void FIFOHandler::Unpack(std::ifstream &backup_file, bool restore_metadata) {
     FileHeader header = this->getFileHeader();
     fs::path fifo_path = fs::current_path() / header.path;

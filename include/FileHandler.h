@@ -7,16 +7,21 @@
 #include <sys/stat.h>
 #include <unordered_map>
 
-
 namespace fs = std::filesystem;
 
 constexpr std::size_t MAX_PATH_LEN = 100;
 
+/**
+ * @brief 文件头部结构，存储文件路径和元数据
+ */
 struct FileHeader {
   char path[MAX_PATH_LEN];
   struct stat metadata;
 };
 
+/**
+ * @brief 文件处理基类，提供文件操作的基本接口
+ */
 class FileHandler : public std::fstream {
 public:
   // 默认构造函数
@@ -28,12 +33,26 @@ public:
 
   // 根据FileHeader构造
 
+  /**
+   * @brief 创建适当类型的文件处理器
+   * @param path 文件路径
+   * @return 文件处理器的智能指针
+   */
   static std::unique_ptr<FileHandler> Create(const fs::path& path);
   static std::unique_ptr<FileHandler> Create(const FileHeader &header);
 
-  // TODO 是否可以将 table 放在 Packer 的全局空间中？还是直接在 Pack 定义即可？
+  /**
+   * @brief 打包文件
+   * @param backup_file 备份文件流
+   * @param inode_table inode表，用于处理硬链接
+   */
   virtual void Pack(std::ofstream &backup_file,
                     std::unordered_map<ino_t, std::string> &inode_table) = 0;
+  /**
+   * @brief 解包文件
+   * @param backup_file 备份文件流
+   * @param restore_metadata 是否恢复元数据
+   */
   virtual void Unpack(std::ifstream &backup_file, bool restore_metadata = false) = 0;
   virtual ~FileHandler() = default;
 
